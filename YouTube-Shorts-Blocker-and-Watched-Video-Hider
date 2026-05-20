@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         YouTube Shorts Blocker and Watched Video Hider
 // @namespace    https://tampermonkey.net/
-// @version      2.1
-// @description  Removes all YouTube Shorts and hides videos watched over 75%. Also lets you Shift+right-click any tile to hide it permanently (persisted in localStorage). Use ytsbListHidden() / ytsbResetHidden() in the console to inspect or clear the manual-hide list. Removes row wrappers, full-width section shelves, and non-video cards so the flex grid reflows with no empty slots.
+// @version      2.2
+// @description  Removes all YouTube Shorts and hides videos watched over 75%. Ctrl+right-click any tile to hide it permanently (persisted in localStorage). Use ytsbListHidden() / ytsbResetHidden() / ytsbUnhide(id) in the console to manage the list. Removes row wrappers, full-width section shelves, and non-video cards so the flex grid reflows with no empty slots.
 // @author       you
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
@@ -13,8 +13,8 @@
 (function () {
     'use strict';
 
-    // Threshold for "watched" (percentage). Lowered from 90 to 75 because
-    // YouTube under-reports completion progress on channel pages.
+    // Threshold for "watched" (percentage). 75 to compensate for YouTube
+    // under-reporting completion on channel pages.
     const WATCHED_THRESHOLD = 75;
 
     // localStorage key for manually-hidden video IDs
@@ -286,7 +286,6 @@
      * ------------------------------------------------------------------ */
     function processManuallyHidden() {
         if (!manuallyHidden.size) return;
-        // Iterate every plausible tile and check its video ID
         const tiles = document.querySelectorAll(INNER_CONTAINERS);
         tiles.forEach(tile => {
             const id = getVideoIdFromNode(tile);
@@ -298,21 +297,20 @@
     }
 
     /* ------------------------------------------------------------------
-     * 9. Shift+right-click to manually hide a tile.
-     *    Plain right-click is left alone so YouTube's own context menu
-     *    still works.
+     * 9. Ctrl+right-click to manually hide a tile.
+     *    NOTE: Firefox unconditionally bypasses page contextmenu handlers
+     *    when Shift is held, so Shift+right-click cannot work. Ctrl is
+     *    the next-cleanest modifier and is not intercepted by Firefox.
+     *    Plain right-click is left alone so the normal menu still works.
      * ------------------------------------------------------------------ */
     document.addEventListener('contextmenu', (e) => {
-        if (!e.shiftKey) return;
+        if (!e.ctrlKey) return;
 
         const tile = findTileFromTarget(e.target);
         if (!tile) return;
 
         const id = getVideoIdFromNode(tile);
-        if (!id) {
-            // No video ID found; let normal menu open rather than swallowing it
-            return;
-        }
+        if (!id) return;
 
         e.preventDefault();
         e.stopPropagation();
