@@ -13,6 +13,11 @@ userscript — all of that behaviour is folded into the content script, plus:
   tile, the add-on also tries to click YouTube's own *Don't recommend channel* item.
   YouTube only exposes that option on some surfaces, so — as you'd expect — it works
   *occasionally*. The channel is hidden by the add-on regardless.
+- **Black out blocked channels.** If you land on a blocked channel's page, or a watch
+  page for one of its videos, the add-on stops playback and replaces the player /
+  thumbnails with a black panel — so no video, no image, and (best-effort) no view is
+  registered. On watch pages the recommendations rail stays visible; a one-click
+  *Unblock this channel* button is shown on the panel.
 - **Easy import / export.** One-click **Export to file**, **Import from file** (merges,
   no duplicates), and **Copy JSON** to clipboard, from both the toolbar popup and the
   full options page. The block list lives in `browser.storage.local`.
@@ -84,6 +89,7 @@ Open the popup or the options page → **Import / Export**:
 | Hide watched videos | on | Removes tiles whose progress bar ≥ threshold. |
 | Watched threshold | 75% | The 75% (not 100%) value compensates for YouTube under-reporting completion on channel pages. |
 | Auto "Don't recommend channel" | on | Best-effort native click when blocking from a tile. |
+| Black out blocked channels | on | Stop playback and hide the player/thumbnails behind a black panel on a blocked channel's page or video (recommendations stay). |
 
 ## How it works
 

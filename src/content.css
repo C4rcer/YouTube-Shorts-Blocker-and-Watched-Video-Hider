@@ -47,7 +47,7 @@ ytd-rich-grid-row > #contents {
     display: flex;
     align-items: center;
     gap: 16px;
-    min-height: 36px;
+    min-height: 40px;
     padding: 0 36px 0 16px;
     box-sizing: border-box;
     font-family: "Roboto", "Arial", sans-serif;
@@ -81,3 +81,68 @@ ytd-rich-grid-row > #contents {
 .ytb-menu-item .ytb-mi-text {
     flex: 1 1 auto;
 }
+
+/* ------------------------------------------------------------------
+ * Blackout: a blocked channel's page / video is replaced with a black
+ * panel. Recommendations (#secondary) on watch pages are left intact.
+ * ------------------------------------------------------------------ */
+
+/* Watch page: hide the player + metadata + comments column content. */
+ytd-watch-flexy.ytb-blackout #primary-inner > *:not(#ytb-blackout-panel) {
+    display: none !important;
+}
+ytd-watch-flexy.ytb-blackout #full-bleed-container,
+ytd-watch-flexy.ytb-blackout #player-full-bleed-container,
+ytd-watch-flexy.ytb-blackout ytd-player {
+    display: none !important;
+}
+
+/* Channel page: hide everything in the active browse view (header, tabs,
+ * content) except our panel. Direct-child hiding is resilient to YouTube's
+ * changing header markup; the deeper selectors are belt-and-braces. */
+ytd-browse.ytb-blackout > *:not(#ytb-blackout-panel),
+ytd-browse.ytb-blackout #page-header,
+ytd-browse.ytb-blackout ytd-tabbed-page-header,
+ytd-browse.ytb-blackout ytd-c4-tabbed-header-renderer,
+ytd-browse.ytb-blackout yt-page-header-renderer,
+ytd-browse.ytb-blackout tp-yt-app-header,
+ytd-browse.ytb-blackout ytd-two-column-browse-results-renderer {
+    display: none !important;
+}
+
+#ytb-blackout-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 70vh;
+    padding: 40px 24px;
+    background: #000;
+    color: #fff;
+    border-radius: 12px;
+    text-align: center;
+    font-family: "Roboto", system-ui, sans-serif;
+}
+#ytb-blackout-panel .ytb-bo-icon { font-size: 40px; line-height: 1; }
+#ytb-blackout-panel .ytb-bo-title { font-size: 22px; font-weight: 600; }
+#ytb-blackout-panel .ytb-bo-sub {
+    font-size: 13px;
+    color: #aaa;
+    max-width: 440px;
+    line-height: 1.5;
+}
+#ytb-blackout-panel .ytb-bo-actions { margin-top: 6px; }
+#ytb-blackout-panel .ytb-bo-btn {
+    background: transparent;
+    color: #3ea6ff;
+    border: 1px solid #3ea6ff;
+    border-radius: 18px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+#ytb-blackout-panel .ytb-bo-btn:hover { background: rgba(62, 166, 255, 0.1); }

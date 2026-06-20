@@ -25,7 +25,8 @@
         blockShorts: true,
         hideWatched: true,
         watchedThreshold: 75,
-        autoDoNotRecommend: true
+        autoDoNotRecommend: true,
+        blackoutBlockedChannels: true
     };
 
     /* ---- live state ------------------------------------------------ */
@@ -40,8 +41,8 @@
     let configVersion = 0;
     let lastSerialized = '';          // guard against echoing our own writes
     let lastContextTarget = null;     // element under the last right-click
-    let currentMenuTile = null;       // tile whose 3-dot menu is open
-    let currentMenuInfo = null;       // channel info for that tile
+    let menuOwnerTile = null;         // tile whose 3-dot menu button was last pressed
+    let blackoutActive = false;       // current page is a blocked channel/video
 
     /* ------------------------------------------------------------------
      * Selectors (shared by removal passes)
@@ -267,13 +268,28 @@
         };
     }
 
-    // On a watch page, read the channel from the owner/uploader byline.
+    // On a watch page, read the channel from the owner/uploader byline, with a
+    // microdata fallback that is present earlier in the page lifecycle.
     function getWatchPageOwnerInfo() {
         const a = document.querySelector(
             'ytd-video-owner-renderer a[href*="/channel/"], ytd-video-owner-renderer a[href^="/@"], ' +
             '#owner a[href*="/channel/"], #owner a[href^="/@"]'
         );
-        return a ? getChannelInfoFromAnchor(a) : null;
+        if (a) return getChannelInfoFromAnchor(a);
+        const meta = document.querySelector(
+            'span[itemprop="author"] link[itemprop="url"][href*="/channel/"], ' +
+            'span[itemprop="author"] link[itemprop="url"][href*="/@"], ' +
+            'link[itemprop="url"][href*="/channel/"]'
+        );
+        if (meta) {
+            const href = meta.getAttribute('href') || '';
+            const idM = href.match(/\/channel\/(UC[\w-]+)/);
+            const handleM = href.match(/\/@([\w.\-]+)/);
+            if (idM || handleM) {
+                return { channelId: idM ? idM[1] : '', handle: handleM ? handleM[1] : '', name: '' };
+            }
+        }
+        return null;
     }
 
     function tileMatchesBlockedChannel(info) {
@@ -396,6 +412,7 @@
         }
         processTiles();
         injectBlockChannelMenuItem();
+        processBlackout();
     }
 
     /* ==================================================================
@@ -485,16 +502,52 @@
     /* ==================================================================
      * 5b. Inject a "Block channel" item into YouTube's native 3-dot menu
      * ================================================================== */
+    // Selector covering both the classic (ytd-*) and newer (view-model) menus.
+    const MENU_ITEM_SELECTOR = [
+        'ytd-menu-service-item-renderer',
+        'ytd-menu-navigation-item-renderer',
+        'yt-list-item-view-model',
+        'tp-yt-paper-item',
+        '*[role="menuitem"]'
+    ].join(',');
+
+    function isVisible(el) {
+        return el && el.offsetParent !== null;
+    }
+
     function findNativeDontRecommend(root) {
-        const items = (root || document).querySelectorAll(
-            'ytd-menu-service-item-renderer, tp-yt-paper-item, yt-list-item-view-model, *[role="menuitem"]'
-        );
+        const items = (root || document).querySelectorAll(MENU_ITEM_SELECTOR);
         for (const it of items) {
             if (it.classList && it.classList.contains('ytb-menu-item')) continue;
+            if (!isVisible(it)) continue;
             const t = (it.textContent || '').trim().toLowerCase();
             if (t.includes("don't recommend channel") || t.includes('dont recommend channel')) return it;
         }
         return null;
+    }
+
+    // Locate the currently-open video action menu regardless of which menu
+    // implementation YouTube is using. Returns the items container + the
+    // "Don't recommend channel" node (if present) to anchor insertion.
+    function findOpenVideoMenu() {
+        const nodes = document.querySelectorAll(MENU_ITEM_SELECTOR);
+        let dnr = null, signal = null;
+        for (const it of nodes) {
+            if (it.classList && it.classList.contains('ytb-menu-item')) continue;
+            if (!isVisible(it)) continue;
+            const t = (it.textContent || '').trim().toLowerCase();
+            if (!t) continue;
+            if (t.includes("don't recommend channel") || t.includes('dont recommend channel')) {
+                dnr = it;
+            } else if (!signal &&
+                       (t.includes('add to queue') || t.includes('save to watch later') ||
+                        t.includes('save to playlist'))) {
+                signal = it;
+            }
+        }
+        const anchor = dnr || signal;
+        if (!anchor || !anchor.parentNode) return null;
+        return { container: anchor.parentNode, dnr };
     }
 
     function closeNativeMenu() {
@@ -507,11 +560,18 @@
         }));
     }
 
+    // Channel for the menu that is currently open: the tile whose menu button
+    // was last pressed, falling back to the watch-page owner.
+    function resolveMenuChannelInfo() {
+        return (menuOwnerTile && getChannelInfoFromNode(menuOwnerTile)) ||
+               getWatchPageOwnerInfo() ||
+               null;
+    }
+
     function onInjectedBlockClick(e) {
         e.preventDefault();
         e.stopPropagation();
-        const popup = (e.currentTarget.closest && e.currentTarget.closest('ytd-menu-popup-renderer')) || document;
-        const info = currentMenuInfo;
+        const info = e.currentTarget._info || resolveMenuChannelInfo();
         if (!info || (!info.handle && !info.channelId && !info.name)) {
             toast('Could not detect a channel for this menu.');
             closeNativeMenu();
@@ -522,7 +582,7 @@
         // channel" item rather than re-opening it. That also closes the menu.
         let nativeClicked = false;
         if (settings.autoDoNotRecommend) {
-            const native = findNativeDontRecommend(popup);
+            const native = findNativeDontRecommend(document);
             if (native) { try { native.click(); nativeClicked = true; } catch (_) {} }
         }
         if (!nativeClicked) closeNativeMenu();
@@ -536,11 +596,13 @@
         return e;
     }
 
-    function buildMenuItem() {
+    function buildMenuItem(info) {
         const el = document.createElement('div');
         el.className = 'ytb-menu-item';
         el.setAttribute('role', 'menuitem');
         el.tabIndex = 0;
+        el._info = info;
+        el._ownerTile = menuOwnerTile;
         const icon = document.createElement('div');
         icon.className = 'ytb-mi-icon';
         const svg = svgEl('svg', { viewBox: '0 0 24 24', 'stroke-width': '2', 'stroke-linecap': 'round' });
@@ -560,24 +622,143 @@
     }
 
     function injectBlockChannelMenuItem() {
-        if (!currentMenuInfo) return;   // only inject for menus we can attribute to a channel
-        const popups = document.querySelectorAll('ytd-menu-popup-renderer');
-        for (const popup of popups) {
-            if (popup.offsetParent === null) continue;            // not the visible menu
-            if (popup.querySelector('.ytb-menu-item')) continue;  // already injected
-            const items = popup.querySelector('tp-yt-paper-listbox#items') ||
-                          popup.querySelector('#items') ||
-                          popup.querySelector('tp-yt-paper-listbox');
-            if (!items) continue;
-            const text = (items.textContent || '').toLowerCase();
-            const dnr = findNativeDontRecommend(popup);
-            const looksLikeVideoMenu = !!dnr || /add to queue|save to watch later|save to playlist/.test(text);
-            if (!looksLikeVideoMenu) continue;
-            const item = buildMenuItem();
-            const host = dnr ? (dnr.closest('ytd-menu-service-item-renderer') || dnr) : null;
-            if (host && host.parentNode) host.parentNode.insertBefore(item, host.nextSibling);
-            else items.appendChild(item);
+        const menu = findOpenVideoMenu();
+        if (!menu) {
+            // No video menu open — drop any stray injected item.
+            document.querySelectorAll('.ytb-menu-item').forEach(el => el.remove());
+            return;
         }
+        const existing = menu.container.querySelector('.ytb-menu-item');
+        if (existing) {
+            if (existing._ownerTile === menuOwnerTile) return;  // still the same menu
+            existing.remove();                                  // owner changed — refresh
+        }
+        const item = buildMenuItem(resolveMenuChannelInfo());
+        if (menu.dnr && menu.dnr.parentNode === menu.container) {
+            menu.container.insertBefore(item, menu.dnr.nextSibling);
+        } else {
+            menu.container.appendChild(item);
+        }
+    }
+
+    /* ==================================================================
+     * 5c. Blackout: if the current page is a blocked channel (its channel
+     *     page, or a watch page for one of its videos), stop playback and
+     *     hide the content behind a black panel — keeping the recommendations
+     *     rail. Best-effort at preventing a view from being registered.
+     * ================================================================== */
+    function ensureNoPlayHook(v) {
+        if (v.dataset.ytbHook) return;
+        v.dataset.ytbHook = '1';
+        // YouTube reuses one <video> across SPA navigations, so the guard must
+        // read the live flag rather than pausing unconditionally.
+        const guard = () => { if (blackoutActive) { try { v.pause(); } catch (e) {} } };
+        v.addEventListener('play', guard, true);
+        v.addEventListener('playing', guard, true);
+        v.addEventListener('loadeddata', guard, true);
+    }
+
+    function stopPlayback() {
+        const v = document.querySelector('video');
+        if (!v) return;
+        ensureNoPlayHook(v);
+        try { v.pause(); } catch (e) {}
+    }
+
+    function blackoutLabel(info) {
+        return info.name || (info.handle ? '@' + info.handle : info.channelId) || 'This channel';
+    }
+
+    function buildBlackoutPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'ytb-blackout-panel';
+        const icon = document.createElement('div');
+        icon.className = 'ytb-bo-icon';
+        icon.textContent = '🚫';
+        const title = document.createElement('div');
+        title.className = 'ytb-bo-title';
+        title.textContent = 'Channel blocked';
+        const sub = document.createElement('div');
+        sub.className = 'ytb-bo-sub';
+        const actions = document.createElement('div');
+        actions.className = 'ytb-bo-actions';
+        const unblock = document.createElement('button');
+        unblock.className = 'ytb-bo-btn';
+        unblock.textContent = 'Unblock this channel';
+        unblock.addEventListener('click', () => {
+            if (panel._info) unblockChannel(panel._info);
+        });
+        actions.appendChild(unblock);
+        panel.appendChild(icon);
+        panel.appendChild(title);
+        panel.appendChild(sub);
+        panel.appendChild(actions);
+        return panel;
+    }
+
+    function setPanelInfo(panel, info) {
+        panel._info = info;
+        const sub = panel.querySelector('.ytb-bo-sub');
+        if (sub) {
+            sub.textContent = blackoutLabel(info) +
+                ' is on your block list — its video, thumbnail and view count are not loaded.';
+        }
+    }
+
+    function placePanel(container, info, asFirstChild) {
+        if (!container) return;
+        let panel = document.getElementById('ytb-blackout-panel');
+        if (!panel) panel = buildBlackoutPanel();
+        if (panel.parentNode !== container) {
+            if (asFirstChild) container.insertBefore(panel, container.firstChild);
+            else container.appendChild(panel);
+        }
+        setPanelInfo(panel, info);
+    }
+
+    function currentBlockedPage() {
+        if (!state.blockedChannels.length) return null;
+        if (location.pathname === '/watch') {
+            const owner = getWatchPageOwnerInfo();
+            return (owner && tileMatchesBlockedChannel(owner)) ? { type: 'watch', info: owner } : null;
+        }
+        const ch = getChannelInfoFromChannelPage();
+        return (ch && tileMatchesBlockedChannel(ch)) ? { type: 'channel', info: ch } : null;
+    }
+
+    function clearBlackout() {
+        if (!blackoutActive && !document.getElementById('ytb-blackout-panel')) return;
+        blackoutActive = false;
+        document.querySelectorAll('.ytb-blackout').forEach(el => el.classList.remove('ytb-blackout'));
+        const p = document.getElementById('ytb-blackout-panel');
+        if (p) p.remove();
+    }
+
+    function processBlackout() {
+        if (!settings.blackoutBlockedChannels) { clearBlackout(); return; }
+        const hit = currentBlockedPage();
+        if (!hit) { clearBlackout(); return; }
+        blackoutActive = true;
+        stopPlayback();
+        if (hit.type === 'watch') {
+            const flexy = document.querySelector('ytd-watch-flexy');
+            if (flexy) flexy.classList.add('ytb-blackout');
+            const primaryInner = document.querySelector('ytd-watch-flexy #primary-inner') ||
+                                 document.querySelector('#primary-inner');
+            placePanel(primaryInner || flexy || document.body, hit.info, true);
+        } else {
+            const browse = document.querySelector('ytd-browse[page-subtype="channels"]') ||
+                           document.querySelector('ytd-browse');
+            if (browse) browse.classList.add('ytb-blackout');
+            placePanel(browse || document.querySelector('#page-manager') || document.body, hit.info, true);
+        }
+    }
+
+    async function unblockChannel(info) {
+        state.blockedChannels = state.blockedChannels.filter(c => !sameChannel(c, info));
+        await persist();
+        // Content was never loaded, so reload to bring the page back cleanly.
+        location.reload();
     }
 
     /* ==================================================================
@@ -614,16 +795,12 @@
         lastContextTarget = e.target;
     }, true);
 
-    // Track which tile's 3-dot menu is being opened so we can attribute the
-    // injected "Block channel" item (and read its channel) correctly.
-    document.addEventListener('click', (e) => {
-        const trigger = e.target.closest && e.target.closest('ytd-menu-renderer');
-        if (!trigger) return;
-        const tile = findTileFromTarget(trigger);
-        currentMenuTile = tile;
-        currentMenuInfo = (tile && getChannelInfoFromNode(tile)) || getWatchPageOwnerInfo() || null;
-        // Drop any stale injected items so the next-opened menu gets a fresh one.
-        document.querySelectorAll('.ytb-menu-item').forEach(el => el.remove());
+    // Record which tile a menu is opened from. The 3-dot button lives inside
+    // the tile, so closest(INNER_CONTAINERS) on the pressed element gives the
+    // owning tile — independent of the (changing) menu-button markup.
+    document.addEventListener('pointerdown', (e) => {
+        const tile = e.target.closest && e.target.closest(INNER_CONTAINERS);
+        if (tile) menuOwnerTile = tile;
     }, true);
 
     api.runtime.onMessage.addListener((msg) => {
@@ -691,6 +868,11 @@
         redirectShortsUrl();
         document.addEventListener('yt-navigate-start', redirectShortsUrl, true);
         document.addEventListener('yt-navigate-finish', redirectShortsUrl, true);
+
+        // Blackout lifecycle: drop it optimistically when navigation starts so a
+        // good video isn't held paused, then re-evaluate when the page settles.
+        document.addEventListener('yt-navigate-start', clearBlackout, true);
+        document.addEventListener('yt-navigate-finish', runAll, true);
         let lastHref = location.href;
         setInterval(() => {
             if (location.href !== lastHref) {

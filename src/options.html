@@ -58,6 +58,10 @@
             <input type="checkbox" id="set-recommend">
             <span class="t-text">Auto-trigger "Don't recommend channel"<small>Best-effort native click when you block a channel from a tile. YouTube only exposes it on some surfaces, so it works occasionally.</small></span>
         </label>
+        <label class="toggle">
+            <input type="checkbox" id="set-blackout">
+            <span class="t-text">Black out blocked channels<small>On a blocked channel's page or video, stop playback and hide the player/thumbnails behind a black panel (recommendations stay) — avoids loading a view.</small></span>
+        </label>
         <div class="row" style="margin-top:10px;">
             <span class="grow muted">Watched threshold (%)</span>
             <input type="number" id="set-threshold" min="1" max="100">

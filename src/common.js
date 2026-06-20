@@ -13,7 +13,8 @@ const YTB = (function () {
         blockShorts: true,
         hideWatched: true,
         watchedThreshold: 75,
-        autoDoNotRecommend: true
+        autoDoNotRecommend: true,
+        blackoutBlockedChannels: true
     };
 
     function normalize(d) {

@@ -15,6 +15,7 @@
         shorts: $('set-shorts'),
         watched: $('set-watched'),
         recommend: $('set-recommend'),
+        blackout: $('set-blackout'),
         threshold: $('set-threshold'),
         exportBtn: $('export-btn'),
         importBtn: $('import-btn'),
@@ -42,6 +43,7 @@
         els.shorts.checked = !!data.settings.blockShorts;
         els.watched.checked = !!data.settings.hideWatched;
         els.recommend.checked = !!data.settings.autoDoNotRecommend;
+        els.blackout.checked = !!data.settings.blackoutBlockedChannels;
         els.threshold.value = data.settings.watchedThreshold;
     }
 
@@ -154,6 +156,7 @@
         data.settings.blockShorts = els.shorts.checked;
         data.settings.hideWatched = els.watched.checked;
         data.settings.autoDoNotRecommend = els.recommend.checked;
+        data.settings.blackoutBlockedChannels = els.blackout.checked;
         data.settings.watchedThreshold = YTB.clampThreshold(els.threshold.value);
         await commit();
     }
@@ -200,7 +203,7 @@
     function wire() {
         els.addBtn.addEventListener('click', addChannel);
         els.addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addChannel(); });
-        [els.shorts, els.watched, els.recommend].forEach(c => c.addEventListener('change', saveSettings));
+        [els.shorts, els.watched, els.recommend, els.blackout].forEach(c => c.addEventListener('change', saveSettings));
         els.threshold.addEventListener('change', saveSettings);
         els.exportBtn.addEventListener('click', doExport);
         els.importBtn.addEventListener('click', () => els.importFile.click());
