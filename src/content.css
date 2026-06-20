@@ -1,0 +1,83 @@
+/* ------------------------------------------------------------------
+ * Always-on layout fix: flatten rich-grid-row wrappers so that
+ * removing tiles (Shorts / watched / blocked channels) lets the
+ * flex grid reflow with no empty slots. Harmless when nothing is
+ * removed.
+ * ------------------------------------------------------------------ */
+ytd-rich-grid-row,
+ytd-rich-grid-row > #contents {
+    display: contents !important;
+}
+
+/* ------------------------------------------------------------------
+ * Toast shown by the content script (e.g. "Blocked channel: …").
+ * ------------------------------------------------------------------ */
+#ytb-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 84px;
+    transform: translateX(-50%) translateY(12px);
+    z-index: 2147483647;
+    max-width: 360px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #1f1f1f;
+    color: #fff;
+    font: 500 13px/1.4 "Roboto", system-ui, sans-serif;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    border: 1px solid #3a3a3a;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#ytb-toast.ytb-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+#ytb-toast .ytb-toast-accent {
+    color: #ff5c5c;
+}
+
+/* ------------------------------------------------------------------
+ * "Block channel" row injected into YouTube's native 3-dot fly-out.
+ * Styled to match native menu items (yt root font-size is 10px, so
+ * 1.4rem = 14px).
+ * ------------------------------------------------------------------ */
+.ytb-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 36px;
+    padding: 0 36px 0 16px;
+    box-sizing: border-box;
+    font-family: "Roboto", "Arial", sans-serif;
+    font-size: 1.4rem;
+    line-height: 2rem;
+    font-weight: 400;
+    color: var(--yt-spec-text-primary, #f1f1f1);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+.ytb-menu-item:hover,
+.ytb-menu-item:focus {
+    background: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.1));
+    outline: none;
+}
+.ytb-menu-item .ytb-mi-icon {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.ytb-menu-item .ytb-mi-icon svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+}
+.ytb-menu-item .ytb-mi-text {
+    flex: 1 1 auto;
+}

@@ -1,0 +1,7 @@
+# Build output
+web-ext-artifacts/
+
+# Dependencies / tooling
+node_modules/
+*.log
+npm-debug.log*

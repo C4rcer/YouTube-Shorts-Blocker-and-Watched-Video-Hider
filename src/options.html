@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YouTube Blocker — Manage</title>
+    <link rel="stylesheet" href="ui.css">
+    <style>
+        body { max-width: 720px; margin: 0 auto; }
+        .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+        @media (max-width: 620px) { .twocol { grid-template-columns: 1fr; } }
+        .twocol .section { border-right: 1px solid var(--border); }
+        .twocol .section:last-child { border-right: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="../icons/icon.svg" alt="">
+        <div class="grow">
+            <h1>YouTube Channel Blocker &amp; Cleaner</h1>
+            <div class="sub">Manage blocked channels, hidden videos, and settings</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Add a channel to block</h2>
+        <div class="row">
+            <input type="text" id="add-input" class="grow" placeholder="@handle, https://youtube.com/@handle, channel URL, UC… ID, or a channel name">
+            <button class="primary" id="add-btn">Block</button>
+        </div>
+        <div class="muted" style="margin-top:8px;font-size:11px;">
+            Tip: on any YouTube page you can right-click a video and choose <b>Block this YouTube channel</b>.
+        </div>
+    </div>
+
+    <div class="twocol">
+        <div class="section">
+            <h2>Blocked channels (<span id="ch-count">0</span>)</h2>
+            <div class="list" id="channel-list"></div>
+        </div>
+        <div class="section">
+            <h2>Hidden videos (<span id="vid-count">0</span>)</h2>
+            <div class="list" id="video-list"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Settings</h2>
+        <label class="toggle">
+            <input type="checkbox" id="set-shorts">
+            <span class="t-text">Remove Shorts<small>Sidebar entries, channel "Shorts" tab, shelves, and /shorts redirect</small></span>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" id="set-watched">
+            <span class="t-text">Hide already-watched videos<small>Once the thumbnail progress bar passes the threshold</small></span>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" id="set-recommend">
+            <span class="t-text">Auto-trigger "Don't recommend channel"<small>Best-effort native click when you block a channel from a tile. YouTube only exposes it on some surfaces, so it works occasionally.</small></span>
+        </label>
+        <div class="row" style="margin-top:10px;">
+            <span class="grow muted">Watched threshold (%)</span>
+            <input type="number" id="set-threshold" min="1" max="100">
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Import / Export</h2>
+        <div class="btn-grid">
+            <button id="export-btn">⬇ Export to file</button>
+            <button id="import-btn">⬆ Import from file</button>
+            <button id="copy-btn">⧉ Copy JSON</button>
+            <button id="clear-btn" class="danger">🗑 Clear everything</button>
+        </div>
+        <input type="file" id="import-file" class="hidden-input" accept="application/json,.json">
+        <div class="status" id="status"></div>
+        <div class="muted" style="margin-top:10px;font-size:11px;">
+            Import merges into your current list (no duplicates). Settings are taken from the imported file.
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>

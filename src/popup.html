@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YouTube Blocker</title>
+    <link rel="stylesheet" href="ui.css">
+    <style>body { width: 340px; }</style>
+</head>
+<body>
+    <div class="header">
+        <img src="../icons/icon.svg" alt="">
+        <div class="grow">
+            <h1>YouTube Blocker</h1>
+            <div class="sub">Channel blocking &amp; cleanup</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="row spread">
+            <span class="pill"><span class="n" id="count-channels">0</span> channels</span>
+            <span class="pill"><span class="n" id="count-videos">0</span> videos</span>
+        </div>
+        <div class="row" style="margin-top:12px;">
+            <input type="text" id="add-input" class="grow" placeholder="@handle, channel URL, or name">
+            <button class="primary" id="add-btn">Block</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Settings</h2>
+        <label class="toggle">
+            <input type="checkbox" id="set-shorts">
+            <span class="t-text">Remove Shorts<small>Sidebar, tabs, shelves, /shorts redirect</small></span>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" id="set-watched">
+            <span class="t-text">Hide watched videos<small>Past the threshold below</small></span>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" id="set-recommend">
+            <span class="t-text">Auto "Don't recommend channel"<small>Best-effort when you block (flaky on YouTube's side)</small></span>
+        </label>
+        <div class="row" style="margin-top:8px;">
+            <span class="grow muted">Watched threshold</span>
+            <input type="number" id="set-threshold" min="1" max="100"> <span class="muted">%</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Block list</h2>
+        <div class="btn-grid">
+            <button id="export-btn">⬇ Export</button>
+            <button id="import-btn">⬆ Import</button>
+            <button id="copy-btn">⧉ Copy JSON</button>
+            <button id="options-btn">⚙ Manage all…</button>
+        </div>
+        <input type="file" id="import-file" class="hidden-input" accept="application/json,.json">
+        <div class="status" id="status"></div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
