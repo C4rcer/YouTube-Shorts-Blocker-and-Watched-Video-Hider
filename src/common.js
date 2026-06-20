@@ -14,7 +14,9 @@ const YTB = (function () {
         hideWatched: true,
         watchedThreshold: 75,
         autoDoNotRecommend: true,
-        blackoutBlockedChannels: true
+        blackoutBlockedChannels: true,
+        maxQuality: true,
+        hideSidebarSpinner: true
     };
 
     function normalize(d) {

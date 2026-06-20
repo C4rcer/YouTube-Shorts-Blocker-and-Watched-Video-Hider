@@ -23,6 +23,8 @@ userscript — all of that behaviour is folded into the content script, plus:
   full options page. The block list lives in `browser.storage.local`.
 - **Remove all Shorts** — sidebar entries, the channel "Shorts" tab, home/search
   shelves, and `/shorts/<id>` URLs (auto-redirected to `/watch?v=<id>`).
+- **Auto max quality.** Sets each new video to the highest available resolution as it loads.
+- **Hide the sidebar loading spinner** in the recommendations rail (cosmetic; loading still happens).
 - **Hide already-watched videos** once their progress bar passes a threshold (default 75%).
 - **Hide individual videos** — right-click → **Hide this video**.
 - **Strip clutter** — ad slots, promo banners, feed nudges, emergency one-boxes — so the
@@ -90,6 +92,8 @@ Open the popup or the options page → **Import / Export**:
 | Watched threshold | 75% | The 75% (not 100%) value compensates for YouTube under-reporting completion on channel pages. |
 | Auto "Don't recommend channel" | on | Best-effort native click when blocking from a tile. |
 | Black out blocked channels | on | Stop playback and hide the player/thumbnails behind a black panel on a blocked channel's page or video (recommendations stay). |
+| Auto max quality | on | Force each new video to the highest available resolution. |
+| Hide sidebar loading spinner | on | Hide the recommendations-rail loading spinner (cosmetic). |
 
 ## How it works
 

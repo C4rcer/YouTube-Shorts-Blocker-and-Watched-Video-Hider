@@ -26,7 +26,9 @@
         hideWatched: true,
         watchedThreshold: 75,
         autoDoNotRecommend: true,
-        blackoutBlockedChannels: true
+        blackoutBlockedChannels: true,
+        maxQuality: true,
+        hideSidebarSpinner: true
     };
 
     /* ---- live state ------------------------------------------------ */
@@ -44,6 +46,7 @@
     let menuOwnerTile = null;         // tile whose 3-dot menu button was last pressed
     let menuOwnerIsMain = false;      // menu opened from the main watch video, not a tile
     let blackoutActive = false;       // current page is a blocked channel/video
+    let lastQualityVideoId = null;    // video we've already forced to max quality
 
     /* ------------------------------------------------------------------
      * Selectors (shared by removal passes)
@@ -105,6 +108,21 @@
         }
     `;
 
+    // Hide the related-sidebar infinite-scroll spinner. visibility:hidden keeps
+    // the element's box so it still triggers loading of more recommendations.
+    const SPINNER_CSS = `
+        ytd-watch-next-secondary-results-renderer tp-yt-paper-spinner,
+        ytd-watch-next-secondary-results-renderer tp-yt-paper-spinner-lite,
+        ytd-watch-next-secondary-results-renderer yt-spinner,
+        ytd-watch-next-secondary-results-renderer .yt-spinner-view-model,
+        #secondary ytd-continuation-item-renderer tp-yt-paper-spinner,
+        #secondary ytd-continuation-item-renderer tp-yt-paper-spinner-lite,
+        #secondary ytd-continuation-item-renderer yt-spinner,
+        #secondary ytd-continuation-item-renderer .yt-spinner-view-model {
+            visibility: hidden !important;
+        }
+    `;
+
     /* ==================================================================
      * 0. State load / save / derive
      * ================================================================== */
@@ -129,6 +147,7 @@
         }
         settings = Object.assign({}, DEFAULT_SETTINGS, state.settings);
         applyShortsCss(settings.blockShorts);
+        applySpinnerCss(settings.hideSidebarSpinner);
         configVersion++;
     }
 
@@ -171,6 +190,20 @@
                 (document.head || document.documentElement).appendChild(s);
             }
             s.textContent = SHORTS_CSS;
+        } else if (s) {
+            s.remove();
+        }
+    }
+
+    function applySpinnerCss(on) {
+        let s = document.getElementById('ytb-spinner-style');
+        if (on) {
+            if (!s) {
+                s = document.createElement('style');
+                s.id = 'ytb-spinner-style';
+                (document.head || document.documentElement).appendChild(s);
+            }
+            s.textContent = SPINNER_CSS;
         } else if (s) {
             s.remove();
         }
@@ -242,24 +275,40 @@
         return { handle, channelId, name };
     }
 
-    // Channel display name from a tile's byline when it isn't a link.
+    function cleanText(s) {
+        return (s || '').replace(/\s+/g, ' ').trim();
+    }
+
+    // Looks like a view-count / date / metadata line rather than a channel name.
+    function looksLikeStats(t) {
+        return /\bviews?\b|watching|\bago\b|streamed|premier|subscribers?|•|\d{1,3}[KMB]?\s*views/i.test(t);
+    }
+
+    // Channel display name from a tile's byline when it isn't a link. Covers the
+    // classic ytd-channel-name renderers and the newer view-model lockups, where
+    // the channel is the first metadata row of plain text.
     function getChannelNameFromTile(node) {
-        const el = node.querySelector(
+        const direct = node.querySelector(
             'ytd-channel-name #text, ytd-channel-name yt-formatted-string, ' +
-            '#channel-name #text, #channel-name yt-formatted-string'
+            '#channel-name #text, #channel-name yt-formatted-string, ' +
+            '#channel-name a, ytd-channel-name a'
         );
-        if (el) {
-            const t = (el.textContent || '').trim();
+        if (direct) {
+            const t = cleanText(direct.textContent);
             if (t) return t;
         }
-        // yt-lockup-view-model: the first metadata row is the channel name.
-        const meta = node.querySelector('yt-content-metadata-view-model');
-        if (meta) {
-            const row = meta.querySelector('[class*="metadata-row"]');
-            if (row) {
-                const t = (row.textContent || '').trim();
-                if (t) return t;
-            }
+        // View-model lockups render the channel as the first of several plain
+        // <span> metadata texts (channel, then "N views", "•", date). The class
+        // is camelCase (ytContentMetadataViewModelMetadataText), so match it
+        // case-insensitively and take the first span that isn't a stats line.
+        const rows = node.querySelectorAll(
+            '[class*="MetadataText" i], ' +
+            '[class*="metadata-row" i], ' +
+            '[class*="metadata-text" i]'
+        );
+        for (const r of rows) {
+            const t = cleanText(r.textContent);
+            if (t && !looksLikeStats(t)) return t;
         }
         return '';
     }
@@ -294,25 +343,45 @@
         };
     }
 
-    // On a watch page, read the channel from the owner/uploader byline, with a
-    // microdata fallback that is present earlier in the page lifecycle.
+    // On a watch page, read the channel from the owner/uploader byline. Capture
+    // the handle/ID from any owner link AND the display name from the channel
+    // name text (the first link is often the text-less avatar), so name-only
+    // blocks still match. Falls back to microdata early in the page lifecycle.
     function getWatchPageOwnerInfo() {
-        const a = document.querySelector(
-            'ytd-video-owner-renderer a[href*="/channel/"], ytd-video-owner-renderer a[href^="/@"], ' +
-            '#owner a[href*="/channel/"], #owner a[href^="/@"]'
-        );
-        if (a) return getChannelInfoFromAnchor(a);
-        const meta = document.querySelector(
-            'span[itemprop="author"] link[itemprop="url"][href*="/channel/"], ' +
-            'span[itemprop="author"] link[itemprop="url"][href*="/@"], ' +
-            'link[itemprop="url"][href*="/channel/"]'
-        );
-        if (meta) {
-            const href = meta.getAttribute('href') || '';
+        const owner = document.querySelector('ytd-video-owner-renderer, #owner');
+        if (owner) {
+            let handle = '', channelId = '', name = '';
+            const link = owner.querySelector('a[href*="/channel/"], a[href^="/@"]');
+            if (link) {
+                const href = link.getAttribute('href') || '';
+                const idM = href.match(/\/channel\/(UC[\w-]+)/);
+                const handleM = href.match(/\/@([\w.\-]+)/);
+                if (idM) channelId = idM[1];
+                if (handleM) handle = handleM[1];
+            }
+            const nameEl = owner.querySelector(
+                'ytd-channel-name #text, #channel-name #text, ' +
+                'ytd-channel-name yt-formatted-string, #channel-name a'
+            );
+            if (nameEl) name = cleanText(nameEl.textContent);
+            if (!name) {
+                for (const a of owner.querySelectorAll('a[href^="/@"], a[href*="/channel/"]')) {
+                    const t = cleanText(a.textContent);
+                    if (t) { name = t; break; }
+                }
+            }
+            if (handle || channelId || name) return { handle, channelId, name };
+        }
+        const author = document.querySelector('span[itemprop="author"]');
+        if (author) {
+            const urlEl = author.querySelector('link[itemprop="url"]');
+            const nameEl = author.querySelector('link[itemprop="name"]');
+            const href = urlEl ? (urlEl.getAttribute('href') || '') : '';
             const idM = href.match(/\/channel\/(UC[\w-]+)/);
             const handleM = href.match(/\/@([\w.\-]+)/);
-            if (idM || handleM) {
-                return { channelId: idM ? idM[1] : '', handle: handleM ? handleM[1] : '', name: '' };
+            const name = nameEl ? cleanText(nameEl.getAttribute('content') || '') : '';
+            if (idM || handleM || name) {
+                return { channelId: idM ? idM[1] : '', handle: handleM ? handleM[1] : '', name };
             }
         }
         return null;
@@ -439,6 +508,7 @@
         processTiles();
         injectBlockChannelMenuItem();
         processBlackout();
+        if (settings.maxQuality && !blackoutActive) applyMaxQuality();
     }
 
     /* ==================================================================
@@ -477,9 +547,14 @@
     // attempt "Don't recommend channel".
     function blockChannelAtTarget(target) {
         const tile = findTileFromTarget(target);
-        const info = (tile && getChannelInfoFromNode(tile)) ||
-                     getChannelInfoFromAnchor(target) ||
-                     getChannelInfoFromChannelPage();
+        // On a tile, attribute ONLY to that tile (never the watched video).
+        // Off a tile, try a clicked channel link, the channel page, then the
+        // watch-page owner.
+        const info = tile
+            ? getChannelInfoFromNode(tile)
+            : (getChannelInfoFromAnchor(target) ||
+               getChannelInfoFromChannelPage() ||
+               getWatchPageOwnerInfo());
         if (!info || (!info.handle && !info.channelId && !info.name)) {
             toast('Could not detect a channel here. Try right-clicking the channel name.');
             return;
@@ -602,6 +677,9 @@
         const info = e.currentTarget._info || resolveMenuChannelInfo();
         if (!info || (!info.handle && !info.channelId && !info.name)) {
             toast('Could not detect a channel for this menu.');
+            // Diagnostic: expand this element in the console and share its markup
+            // if a tile's channel still can't be read.
+            console.warn('[YT Blocker] Could not detect channel. Menu owner tile:', menuOwnerTile);
             closeNativeMenu();
             return;
         }
@@ -787,6 +865,29 @@
         await persist();
         // Content was never loaded, so reload to bring the page back cleanly.
         location.reload();
+    }
+
+    /* ==================================================================
+     * 5d. Force the player to the highest available quality, once per video.
+     *     The player API lives in the page world; Firefox exposes it to the
+     *     content script via wrappedJSObject.
+     * ================================================================== */
+    function applyMaxQuality() {
+        if (location.pathname !== '/watch') return;
+        const vid = new URLSearchParams(location.search).get('v');
+        if (!vid || vid === lastQualityVideoId) return;   // already done this video
+        const player = document.getElementById('movie_player');
+        const pApi = player && (player.wrappedJSObject || player);
+        if (!pApi || typeof pApi.getAvailableQualityLevels !== 'function') return;
+        let levels;
+        try { levels = pApi.getAvailableQualityLevels(); } catch (e) { return; }
+        if (!levels || !levels.length) return;            // player not ready yet
+        const best = levels[0];                           // ordered highest -> lowest
+        try {
+            if (typeof pApi.setPlaybackQualityRange === 'function') pApi.setPlaybackQualityRange(best, best);
+            if (typeof pApi.setPlaybackQuality === 'function') pApi.setPlaybackQuality(best);
+            lastQualityVideoId = vid;
+        } catch (e) { /* ignore */ }
     }
 
     /* ==================================================================
