@@ -42,6 +42,7 @@
     let lastSerialized = '';          // guard against echoing our own writes
     let lastContextTarget = null;     // element under the last right-click
     let menuOwnerTile = null;         // tile whose 3-dot menu button was last pressed
+    let menuOwnerIsMain = false;      // menu opened from the main watch video, not a tile
     let blackoutActive = false;       // current page is a blocked channel/video
 
     /* ------------------------------------------------------------------
@@ -234,8 +235,33 @@
             const t = (a.textContent || '').trim();
             if (t && !name) name = t;
         }
+        // Newer lockup tiles render the channel name as plain text (no link),
+        // so fall back to reading it from the byline element.
+        if (!name) name = getChannelNameFromTile(node);
         if (!handle && !channelId && !name) return null;
         return { handle, channelId, name };
+    }
+
+    // Channel display name from a tile's byline when it isn't a link.
+    function getChannelNameFromTile(node) {
+        const el = node.querySelector(
+            'ytd-channel-name #text, ytd-channel-name yt-formatted-string, ' +
+            '#channel-name #text, #channel-name yt-formatted-string'
+        );
+        if (el) {
+            const t = (el.textContent || '').trim();
+            if (t) return t;
+        }
+        // yt-lockup-view-model: the first metadata row is the channel name.
+        const meta = node.querySelector('yt-content-metadata-view-model');
+        if (meta) {
+            const row = meta.querySelector('[class*="metadata-row"]');
+            if (row) {
+                const t = (row.textContent || '').trim();
+                if (t) return t;
+            }
+        }
+        return '';
     }
 
     function getChannelInfoFromAnchor(node) {
@@ -560,12 +586,14 @@
         }));
     }
 
-    // Channel for the menu that is currently open: the tile whose menu button
-    // was last pressed, falling back to the watch-page owner.
+    // Channel for the menu that is currently open. When the menu was opened
+    // from a tile, attribute ONLY to that tile — never fall back to the watch
+    // page owner, or blocking from a recommendation would block the video you
+    // are watching. The page owner is used only for the main video's own menu.
     function resolveMenuChannelInfo() {
-        return (menuOwnerTile && getChannelInfoFromNode(menuOwnerTile)) ||
-               getWatchPageOwnerInfo() ||
-               null;
+        if (menuOwnerTile) return getChannelInfoFromNode(menuOwnerTile);
+        if (menuOwnerIsMain) return getWatchPageOwnerInfo();
+        return null;
     }
 
     function onInjectedBlockClick(e) {
@@ -797,10 +825,20 @@
 
     // Record which tile a menu is opened from. The 3-dot button lives inside
     // the tile, so closest(INNER_CONTAINERS) on the pressed element gives the
-    // owning tile — independent of the (changing) menu-button markup.
+    // owning tile — independent of the (changing) menu-button markup. If the
+    // press is in the main watch video's metadata instead, flag that so we
+    // attribute to the page owner rather than a stale tile.
     document.addEventListener('pointerdown', (e) => {
-        const tile = e.target.closest && e.target.closest(INNER_CONTAINERS);
-        if (tile) menuOwnerTile = tile;
+        if (!e.target.closest) return;
+        const tile = e.target.closest(INNER_CONTAINERS);
+        if (tile) {
+            menuOwnerTile = tile;
+            menuOwnerIsMain = false;
+        } else if (e.target.closest('ytd-watch-metadata, #above-the-fold')) {
+            menuOwnerTile = null;
+            menuOwnerIsMain = true;
+        }
+        // Anything else (e.g. our own popup item) leaves the attribution intact.
     }, true);
 
     api.runtime.onMessage.addListener((msg) => {
