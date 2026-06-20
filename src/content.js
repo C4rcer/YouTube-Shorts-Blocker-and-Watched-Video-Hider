@@ -163,6 +163,14 @@
         }
     }
 
+    // Persist without re-running the full pass (used by enrichment inside runAll).
+    async function saveOnly() {
+        try {
+            lastSerialized = JSON.stringify(state);
+            await api.storage.local.set({ [STORAGE_KEY]: state });
+        } catch (e) { /* ignore */ }
+    }
+
     function migrateLegacyLocalStorage() {
         try {
             const raw = window.localStorage.getItem(LEGACY_HIDDEN_KEY);
@@ -327,20 +335,42 @@
         };
     }
 
-    // When sitting on a channel's own page, read it from the URL + header.
+    // When sitting on a channel's own page, read its identity from the page,
+    // not just the URL — so legacy custom URLs (/linustechtips, /c/x, /user/x)
+    // resolve too. The canonical link gives the UC id for any URL form, and the
+    // header gives the @handle + display name.
     function getChannelInfoFromChannelPage() {
+        const browse = document.querySelector('ytd-browse[page-subtype="channels"]');
         const path = location.pathname;
-        const idM = path.match(/\/channel\/(UC[\w-]+)/);
-        const handleM = path.match(/\/@([\w.\-]+)/);
-        if (!idM && !handleM) return null;
-        const nameEl = document.querySelector(
-            'ytd-channel-name #text, yt-dynamic-text-view-model h1, #channel-name #text, #channel-header #text'
+        let handle = (path.match(/\/@([\w.\-]+)/) || [])[1] || '';
+        let channelId = (path.match(/\/channel\/(UC[\w-]+)/) || [])[1] || '';
+        if (!handle && !channelId && !browse) return null;   // not a channel page
+
+        if (!channelId) {
+            const canon = document.querySelector('link[rel="canonical"]');
+            const cm = canon && (canon.getAttribute('href') || '').match(/\/channel\/(UC[\w-]+)/);
+            if (cm) channelId = cm[1];
+        }
+        const header = document.querySelector(
+            'yt-page-header-renderer, ytd-browse[page-subtype="channels"] #page-header, #channel-header'
         );
-        return {
-            channelId: idM ? idM[1] : '',
-            handle: handleM ? handleM[1] : '',
-            name: nameEl ? (nameEl.textContent || '').trim() : ''
-        };
+        if (!handle && header) {
+            const hLink = header.querySelector('a[href^="/@"]');
+            if (hLink) handle = ((hLink.getAttribute('href') || '').match(/\/@([\w.\-]+)/) || [])[1] || '';
+            if (!handle) {
+                const metaRow = header.querySelector('yt-content-metadata-view-model') || header;
+                const tm = (metaRow.textContent || '').match(/@([\w.\-]{2,})/);
+                if (tm) handle = tm[1];
+            }
+        }
+        const nameEl = document.querySelector(
+            'yt-page-header-renderer h1, yt-dynamic-text-view-model h1, ' +
+            'ytd-channel-name #text, #channel-name #text, #channel-header #text'
+        );
+        const name = nameEl ? cleanText(nameEl.textContent) : '';
+
+        if (!handle && !channelId && !name) return null;
+        return { handle, channelId, name };
     }
 
     // On a watch page, read the channel from the owner/uploader byline. Capture
@@ -391,7 +421,14 @@
         if (!info) return false;
         if (info.channelId && blockedIndex.ids.has(info.channelId)) return true;
         if (info.handle && blockedIndex.handles.has(info.handle.toLowerCase())) return true;
-        if (info.name && blockedIndex.names.has(info.name.toLowerCase().trim())) return true;
+        if (info.name) {
+            const n = info.name.toLowerCase().trim();
+            if (blockedIndex.names.has(n)) return true;
+            // A handle is usually the display name without spaces
+            // ("Linus Tech Tips" -> "linustechtips"), so match that too.
+            const compact = n.replace(/\s+/g, '');
+            if (compact.length >= 5 && blockedIndex.handles.has(compact)) return true;
+        }
         return false;
     }
 
@@ -497,6 +534,29 @@
         }
     }
 
+    // Merge any identifiers found on the current page into a matching block
+    // entry, so a block made with only one identifier (e.g. an @handle) learns
+    // the others (name, UC id) and starts matching every surface.
+    function enrichBlockedChannel(info) {
+        if (!info) return;
+        let changed = false;
+        for (const c of state.blockedChannels) {
+            if (!sameChannel(c, info)) continue;
+            if (info.handle && !c.handle) { c.handle = info.handle; changed = true; }
+            if (info.channelId && !c.channelId) { c.channelId = info.channelId; changed = true; }
+            if (info.name && !c.name) { c.name = info.name; changed = true; }
+        }
+        if (changed) { rebuildDerived(); saveOnly(); }
+    }
+
+    function enrichFromCurrentPage() {
+        if (!state.blockedChannels.length) return;
+        const info = location.pathname === '/watch'
+            ? getWatchPageOwnerInfo()
+            : getChannelInfoFromChannelPage();
+        if (info && tileMatchesBlockedChannel(info)) enrichBlockedChannel(info);
+    }
+
     function runAll() {
         flattenRows();
         if (settings.blockShorts) removeSectionShelves();
@@ -505,7 +565,8 @@
             processWatchedByProgressBar();
             processWatchedByContainer();
         }
-        processTiles();
+        enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
+        processTiles();            // then hide tiles using the enriched index
         injectBlockChannelMenuItem();
         processBlackout();
         if (settings.maxQuality && !blackoutActive) applyMaxQuality();
