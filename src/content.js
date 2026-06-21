@@ -28,7 +28,8 @@
         autoDoNotRecommend: true,
         blackoutBlockedChannels: true,
         maxQuality: true,
-        hideSidebarSpinner: true
+        hideSidebarSpinner: true,
+        reduceFlashing: true
     };
 
     /* ---- live state ------------------------------------------------ */
@@ -109,6 +110,27 @@
         }
     `;
 
+    // Anti-flash: keep tiles that carry a watched-progress overlay hidden until
+    // we've decided to keep them, so already-watched uploads never paint before
+    // being removed. Reveal happens by setting data-ytb-keep on survivors.
+    const ANTIFLASH_CELLS = [
+        'ytd-rich-item-renderer',
+        'ytd-video-renderer',
+        'ytd-grid-video-renderer',
+        'ytd-compact-video-renderer',
+        'ytd-playlist-video-renderer',
+        'yt-lockup-view-model'
+    ];
+    const ANTIFLASH_WATCHED = [
+        'ytd-thumbnail-overlay-resume-playback-renderer',
+        '.ytThumbnailOverlayProgressBarHostWatchedProgressBar',
+        '.ytThumbnailOverlayProgressBarHostWatchedProgressBarLegacy'
+    ];
+    const ANTIFLASH_SELECTOR = ANTIFLASH_CELLS
+        .flatMap(cell => ANTIFLASH_WATCHED.map(w => `${cell}:has(${w}):not([data-ytb-keep])`))
+        .join(',');
+    const ANTIFLASH_CSS = ANTIFLASH_SELECTOR + ' { display: none !important; }';
+
     // Hide the related-sidebar infinite-scroll spinner. visibility:hidden keeps
     // the element's box so it still triggers loading of more recommendations.
     const SPINNER_CSS = `
@@ -149,6 +171,7 @@
         settings = Object.assign({}, DEFAULT_SETTINGS, state.settings);
         applyShortsCss(settings.blockShorts);
         applySpinnerCss(settings.hideSidebarSpinner);
+        applyAntiflashCss(settings.reduceFlashing && settings.hideWatched);
         configVersion++;
     }
 
@@ -216,6 +239,28 @@
         } else if (s) {
             s.remove();
         }
+    }
+
+    function applyAntiflashCss(on) {
+        let s = document.getElementById('ytb-antiflash-style');
+        if (on) {
+            if (!s) {
+                s = document.createElement('style');
+                s.id = 'ytb-antiflash-style';
+                (document.head || document.documentElement).appendChild(s);
+            }
+            s.textContent = ANTIFLASH_CSS;
+        } else if (s) {
+            s.remove();
+        }
+    }
+
+    // Reveal watched tiles that survived the threshold removal (i.e. below the
+    // threshold), so the anti-flash CSS stops hiding them.
+    function revealRemainingWatched() {
+        document.querySelectorAll(ANTIFLASH_SELECTOR).forEach(cell => {
+            cell.dataset.ytbKeep = '1';
+        });
     }
 
     /* ==================================================================
@@ -565,6 +610,10 @@
         if (settings.hideWatched) {
             processWatchedByProgressBar();
             processWatchedByContainer();
+            // Reveal the watched tiles we DIDN'T remove (below threshold) so the
+            // anti-flash CSS stops hiding them. Watched tiles over the threshold
+            // are already gone, so they never paint.
+            if (settings.reduceFlashing) revealRemainingWatched();
         }
         enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
         processTiles();            // then hide tiles using the enriched index

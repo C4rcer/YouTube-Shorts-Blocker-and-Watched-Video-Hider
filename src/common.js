@@ -16,7 +16,8 @@ const YTB = (function () {
         autoDoNotRecommend: true,
         blackoutBlockedChannels: true,
         maxQuality: true,
-        hideSidebarSpinner: true
+        hideSidebarSpinner: true,
+        reduceFlashing: true
     };
 
     function normalize(d) {

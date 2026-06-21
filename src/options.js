@@ -14,6 +14,7 @@
         videoList: $('video-list'),
         shorts: $('set-shorts'),
         watched: $('set-watched'),
+        flash: $('set-flash'),
         recommend: $('set-recommend'),
         blackout: $('set-blackout'),
         quality: $('set-quality'),
@@ -44,6 +45,7 @@
         renderVideos();
         els.shorts.checked = !!data.settings.blockShorts;
         els.watched.checked = !!data.settings.hideWatched;
+        els.flash.checked = !!data.settings.reduceFlashing;
         els.recommend.checked = !!data.settings.autoDoNotRecommend;
         els.blackout.checked = !!data.settings.blackoutBlockedChannels;
         els.quality.checked = !!data.settings.maxQuality;
@@ -159,6 +161,7 @@
     async function saveSettings() {
         data.settings.blockShorts = els.shorts.checked;
         data.settings.hideWatched = els.watched.checked;
+        data.settings.reduceFlashing = els.flash.checked;
         data.settings.autoDoNotRecommend = els.recommend.checked;
         data.settings.blackoutBlockedChannels = els.blackout.checked;
         data.settings.maxQuality = els.quality.checked;
@@ -209,7 +212,7 @@
     function wire() {
         els.addBtn.addEventListener('click', addChannel);
         els.addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addChannel(); });
-        [els.shorts, els.watched, els.recommend, els.blackout, els.quality, els.spinner].forEach(c => c.addEventListener('change', saveSettings));
+        [els.shorts, els.watched, els.flash, els.recommend, els.blackout, els.quality, els.spinner].forEach(c => c.addEventListener('change', saveSettings));
         els.threshold.addEventListener('change', saveSettings);
         els.exportBtn.addEventListener('click', doExport);
         els.importBtn.addEventListener('click', () => els.importFile.click());
