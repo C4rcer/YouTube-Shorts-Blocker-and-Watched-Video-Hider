@@ -29,7 +29,8 @@
         blackoutBlockedChannels: true,
         maxQuality: true,
         hideSidebarSpinner: true,
-        reduceFlashing: true
+        reduceFlashing: true,
+        hideEndScreen: true
     };
 
     /* ---- live state ------------------------------------------------ */
@@ -146,6 +147,17 @@
         }
     `;
 
+    // Remove the in-player suggested-video embeds: the end-screen "video wall"
+    // shown when a video finishes, and the pause-screen suggestions.
+    const ENDSCREEN_CSS = `
+        .html5-endscreen,
+        .ytp-endscreen-content,
+        .ytp-pause-overlay,
+        .ytp-pause-overlay-container {
+            display: none !important;
+        }
+    `;
+
     /* ==================================================================
      * 0. State load / save / derive
      * ================================================================== */
@@ -172,6 +184,7 @@
         applyShortsCss(settings.blockShorts);
         applySpinnerCss(settings.hideSidebarSpinner);
         applyAntiflashCss(settings.reduceFlashing && settings.hideWatched);
+        applyEndScreenCss(settings.hideEndScreen);
         configVersion++;
     }
 
@@ -250,6 +263,20 @@
                 (document.head || document.documentElement).appendChild(s);
             }
             s.textContent = ANTIFLASH_CSS;
+        } else if (s) {
+            s.remove();
+        }
+    }
+
+    function applyEndScreenCss(on) {
+        let s = document.getElementById('ytb-endscreen-style');
+        if (on) {
+            if (!s) {
+                s = document.createElement('style');
+                s.id = 'ytb-endscreen-style';
+                (document.head || document.documentElement).appendChild(s);
+            }
+            s.textContent = ENDSCREEN_CSS;
         } else if (s) {
             s.remove();
         }

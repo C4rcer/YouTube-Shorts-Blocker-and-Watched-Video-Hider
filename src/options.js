@@ -19,6 +19,7 @@
         blackout: $('set-blackout'),
         quality: $('set-quality'),
         spinner: $('set-spinner'),
+        endscreen: $('set-endscreen'),
         threshold: $('set-threshold'),
         exportBtn: $('export-btn'),
         importBtn: $('import-btn'),
@@ -50,6 +51,7 @@
         els.blackout.checked = !!data.settings.blackoutBlockedChannels;
         els.quality.checked = !!data.settings.maxQuality;
         els.spinner.checked = !!data.settings.hideSidebarSpinner;
+        els.endscreen.checked = !!data.settings.hideEndScreen;
         els.threshold.value = data.settings.watchedThreshold;
     }
 
@@ -166,6 +168,7 @@
         data.settings.blackoutBlockedChannels = els.blackout.checked;
         data.settings.maxQuality = els.quality.checked;
         data.settings.hideSidebarSpinner = els.spinner.checked;
+        data.settings.hideEndScreen = els.endscreen.checked;
         data.settings.watchedThreshold = YTB.clampThreshold(els.threshold.value);
         await commit();
     }
@@ -212,7 +215,7 @@
     function wire() {
         els.addBtn.addEventListener('click', addChannel);
         els.addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addChannel(); });
-        [els.shorts, els.watched, els.flash, els.recommend, els.blackout, els.quality, els.spinner].forEach(c => c.addEventListener('change', saveSettings));
+        [els.shorts, els.watched, els.flash, els.recommend, els.blackout, els.quality, els.spinner, els.endscreen].forEach(c => c.addEventListener('change', saveSettings));
         els.threshold.addEventListener('change', saveSettings);
         els.exportBtn.addEventListener('click', doExport);
         els.importBtn.addEventListener('click', () => els.importFile.click());

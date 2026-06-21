@@ -98,6 +98,7 @@ Open the popup or the options page → **Import / Export**:
 | Auto max quality | on | Force each new video to the highest available resolution. |
 | Hide sidebar loading spinner | on | Hide the recommendations-rail loading spinner (cosmetic). |
 | Reduce flashing | on | Keep watched videos hidden from the start (CSS) instead of letting them paint then get removed — no pop-in/out when sorting oldest-first. |
+| Hide end-screen suggestions | on | Remove the suggested-video grid shown over the player when a video ends, plus pause-screen suggestions. |
 
 ## How it works
 
