@@ -148,10 +148,15 @@
     `;
 
     // Remove the in-player suggested-video embeds: the end-screen "video wall"
-    // shown when a video finishes, and the pause-screen suggestions.
+    // shown when a video finishes (classic .html5-endscreen and the newer
+    // .ytp-fullscreen-grid / .ytp-modern-videowall-still layout), plus the
+    // pause-screen suggestions.
     const ENDSCREEN_CSS = `
         .html5-endscreen,
         .ytp-endscreen-content,
+        .ytp-fullscreen-grid,
+        .ytp-videowall-still,
+        .ytp-modern-videowall-still,
         .ytp-pause-overlay,
         .ytp-pause-overlay-container {
             display: none !important;
@@ -617,13 +622,13 @@
     // lists here. (Use Ctrl+right-click to hide an individual one.)
     function processEndScreen() {
         if (!hiddenSet.size && !state.blockedChannels.length) return;
-        const stills = document.querySelectorAll('a.ytp-videowall-still');
+        const stills = document.querySelectorAll('a.ytp-videowall-still, a.ytp-modern-videowall-still');
         for (const still of stills) {
             if (still.style.display === 'none') continue;
             const id = videoIdFromHref(still.getAttribute('href') || still.href || '');
             if (id && hiddenSet.has(id)) { still.style.display = 'none'; continue; }
             if (state.blockedChannels.length) {
-                const author = still.querySelector('.ytp-videowall-still-info-author');
+                const author = still.querySelector('[class*="still-info-author"]');
                 const name = author ? (author.textContent || '').split('•')[0].trim() : '';
                 if (name && tileMatchesBlockedChannel({ handle: '', channelId: '', name })) {
                     still.style.display = 'none';
@@ -656,25 +661,32 @@
     }
 
     function runAll() {
-        flattenRows();
-        if (settings.blockShorts) removeSectionShelves();
-        removeNonVideoCards();
-        if (settings.hideWatched) {
-            processWatchedByProgressBar();
-            processWatchedByContainer();
-            // Reveal the watched tiles we DIDN'T remove (below threshold) so the
-            // anti-flash CSS stops hiding them. Watched tiles over the threshold
-            // are already gone, so they never paint.
-            if (settings.reduceFlashing) revealRemainingWatched();
+        try {
+            flattenRows();
+            if (settings.blockShorts) removeSectionShelves();
+            removeNonVideoCards();
+            if (settings.hideWatched) {
+                processWatchedByProgressBar();
+                processWatchedByContainer();
+            }
+            enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
+            processTiles();            // then hide tiles using the enriched index
+            processEndScreen();        // and the in-player end-screen suggestions
+            // Menu scanning is expensive (*[role="menuitem"]); only do it shortly
+            // after a press, when a menu may actually have opened.
+            if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
+            processBlackout();
+            if (settings.maxQuality && !blackoutActive) applyMaxQuality();
+        } catch (e) {
+            console.warn('[YT Blocker] pass error:', e);
+        } finally {
+            // ALWAYS reveal anti-flash-hidden tiles, even if something above threw
+            // — otherwise a mid-pass error could leave watched-hidden content
+            // (e.g. the recommendations sidebar) stuck invisible until reload.
+            if (settings.reduceFlashing && settings.hideWatched) {
+                try { revealRemainingWatched(); } catch (e) { /* ignore */ }
+            }
         }
-        enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
-        processTiles();            // then hide tiles using the enriched index
-        processEndScreen();        // and the in-player end-screen suggestions
-        // Menu scanning is expensive (*[role="menuitem"]); only do it shortly
-        // after a press, when a menu may actually have opened.
-        if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
-        processBlackout();
-        if (settings.maxQuality && !blackoutActive) applyMaxQuality();
     }
 
     /* ==================================================================
@@ -1093,7 +1105,7 @@
         // right-click so the normal menu still works, and rather than Shift
         // because Firefox bypasses page handlers when Shift is held.
         if (!e.ctrlKey || !e.target.closest) return;
-        const still = e.target.closest('a.ytp-videowall-still');
+        const still = e.target.closest('a.ytp-videowall-still, a.ytp-modern-videowall-still');
         const tile = still ? null : findTileFromTarget(e.target);
         if (!still && !tile) return;
         const id = still
