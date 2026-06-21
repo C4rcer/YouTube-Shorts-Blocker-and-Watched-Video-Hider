@@ -298,6 +298,11 @@
         return m ? m[1] : null;
     }
 
+    function videoIdFromHref(href) {
+        const m = (href || '').match(/[?&]v=([^&]+)/) || (href || '').match(/youtu\.be\/([^?&/]+)/);
+        return m ? m[1] : null;
+    }
+
     function findTileFromTarget(target) {
         if (!target || !target.closest) return null;
         return target.closest(OUTER_GRID_CELLS) ||
@@ -580,6 +585,26 @@
         }
     }
 
+    // The in-player end-screen "video wall" uses its own markup (not ytd-* tiles)
+    // and has no watched indicator, so apply the hidden-id and blocked-channel
+    // lists here. (Use Ctrl+right-click to hide an individual one.)
+    function processEndScreen() {
+        if (!hiddenSet.size && !state.blockedChannels.length) return;
+        const stills = document.querySelectorAll('a.ytp-videowall-still');
+        for (const still of stills) {
+            if (still.style.display === 'none') continue;
+            const id = videoIdFromHref(still.getAttribute('href') || still.href || '');
+            if (id && hiddenSet.has(id)) { still.style.display = 'none'; continue; }
+            if (state.blockedChannels.length) {
+                const author = still.querySelector('.ytp-videowall-still-info-author');
+                const name = author ? (author.textContent || '').split('•')[0].trim() : '';
+                if (name && tileMatchesBlockedChannel({ handle: '', channelId: '', name })) {
+                    still.style.display = 'none';
+                }
+            }
+        }
+    }
+
     // Merge any identifiers found on the current page into a matching block
     // entry, so a block made with only one identifier (e.g. an @handle) learns
     // the others (name, UC id) and starts matching every surface.
@@ -617,6 +642,7 @@
         }
         enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
         processTiles();            // then hide tiles using the enriched index
+        processEndScreen();        // and the in-player end-screen suggestions
         // Menu scanning is expensive (*[role="menuitem"]); only do it shortly
         // after a press, when a menu may actually have opened.
         if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
@@ -1035,6 +1061,25 @@
      * ================================================================== */
     document.addEventListener('contextmenu', (e) => {
         lastContextTarget = e.target;
+        // Ctrl+right-click = hide this video immediately (works on normal tiles
+        // AND in-player end-screen suggestions). Ctrl is used rather than plain
+        // right-click so the normal menu still works, and rather than Shift
+        // because Firefox bypasses page handlers when Shift is held.
+        if (!e.ctrlKey || !e.target.closest) return;
+        const still = e.target.closest('a.ytp-videowall-still');
+        const tile = still ? null : findTileFromTarget(e.target);
+        if (!still && !tile) return;
+        const id = still
+            ? videoIdFromHref(still.getAttribute('href') || still.href || '')
+            : getVideoIdFromNode(tile);
+        if (!id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!hiddenSet.has(id)) state.hiddenVideoIds.push(id);
+        if (still) still.style.display = 'none';
+        else removeTile(tile);
+        persist();
+        toast('Hid video', id);
     }, true);
 
     // Record which tile a menu is opened from. The 3-dot button lives inside

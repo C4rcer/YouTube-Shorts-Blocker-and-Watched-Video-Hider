@@ -60,8 +60,11 @@ Works on `www.youtube.com` and `m.youtube.com`.
 
 ### Hide a single video
 
-Right-click the tile → **Hide this video**. The video ID is saved and stays hidden across
-reloads.
+Right-click the tile → **Hide this video**, or **Ctrl + right-click** the tile to hide it
+instantly. Ctrl + right-click also works on the in-player **end-screen suggestions** (the
+video wall shown when a video finishes), which otherwise have no hide affordance. The video
+ID is saved and stays hidden across reloads — and hidden IDs / blocked channels are also
+filtered out of the end-screen suggestions.
 
 ### Import / export
 
