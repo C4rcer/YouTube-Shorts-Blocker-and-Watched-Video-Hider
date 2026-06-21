@@ -97,8 +97,9 @@ Open the popup or the options page → **Import / Export**:
 
 ## How it works
 
-- **`src/content.js`** runs at `document_start`. A `MutationObserver` plus a 1.5 s safety
-  interval re-runs the cleanup pass on infinite-scroll / SPA navigation. Blocked-channel
+- **`src/content.js`** runs at `document_start`. A debounced `MutationObserver` (added/removed
+  nodes only) plus a 2 s safety interval re-runs the cleanup pass on infinite-scroll / SPA
+  navigation — debouncing keeps channel pages with thousands of tiles responsive. Blocked-channel
   matching merges the `@handle`, `UC…` ID, and display name found across a tile's links and
   compares against the block list (case-insensitive). Tiles are tagged per config version so
   unchanged tiles aren't re-scanned.

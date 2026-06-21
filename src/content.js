@@ -47,6 +47,7 @@
     let menuOwnerIsMain = false;      // menu opened from the main watch video, not a tile
     let blackoutActive = false;       // current page is a blocked channel/video
     let lastQualityVideoId = null;    // video we've already forced to max quality
+    let lastPointerDown = 0;          // timestamp of last pointerdown (menu-open hint)
 
     /* ------------------------------------------------------------------
      * Selectors (shared by removal passes)
@@ -567,7 +568,9 @@
         }
         enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
         processTiles();            // then hide tiles using the enriched index
-        injectBlockChannelMenuItem();
+        // Menu scanning is expensive (*[role="menuitem"]); only do it shortly
+        // after a press, when a menu may actually have opened.
+        if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
         processBlackout();
         if (settings.maxQuality && !blackoutActive) applyMaxQuality();
     }
@@ -991,6 +994,7 @@
     // press is in the main watch video's metadata instead, flag that so we
     // attribute to the page owner rather than a stale tile.
     document.addEventListener('pointerdown', (e) => {
+        lastPointerDown = Date.now();
         if (!e.target.closest) return;
         const tile = e.target.closest(INNER_CONTAINERS);
         if (tile) {
@@ -1048,21 +1052,22 @@
             requestAnimationFrame(bootObserver);
             return;
         }
-        let scheduled = false;
+        // Debounce: coalesce bursts of mutations — and our own tile removals —
+        // into a single pass after things settle, instead of running every
+        // frame. This is what keeps channel pages with thousands of tiles from
+        // locking up (each pass does several full-document scans).
+        let debounceTimer = null;
         const schedule = () => {
-            if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => { scheduled = false; runAll(); });
+            if (debounceTimer) return;
+            debounceTimer = setTimeout(() => { debounceTimer = null; runAll(); }, 200);
         };
+        // Only react to added/removed nodes. Watching attribute churn
+        // (style/class) fired constantly on YouTube and dominated CPU; the
+        // interval below is the safety net for anything attribute-driven.
         const observer = new MutationObserver(schedule);
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['style', 'href', 'class']
-        });
+        observer.observe(document.body, { childList: true, subtree: true });
         runAll();
-        setInterval(runAll, 1500);
+        setInterval(runAll, 2000);
 
         // Shorts redirect lifecycle
         redirectShortsUrl();
