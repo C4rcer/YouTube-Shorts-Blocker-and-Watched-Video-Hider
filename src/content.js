@@ -313,7 +313,10 @@
         let target = tile.closest(INNER_CONTAINERS) || tile;
         const outer = target.closest(OUTER_GRID_CELLS);
         if (outer) target = outer;
-        target.remove();
+        if (target.classList.contains('ytb-removed')) return;
+        // Hide in place instead of removing — see .ytb-removed in content.css.
+        target.classList.add('ytb-removed');
+        target.dataset.ytbKeep = '1';   // also exempt from the anti-flash :has() pass
     }
 
     function removeContainingTile(node) {
@@ -543,33 +546,38 @@
         });
     }
 
+    function hideEl(el) {
+        if (el && !el.classList.contains('ytb-removed')) el.classList.add('ytb-removed');
+    }
+
     function removeSectionShelves() {
         document.querySelectorAll('ytd-rich-grid-renderer').forEach(grid => {
-            grid.querySelectorAll(':scope > #contents > ytd-rich-section-renderer')
-                .forEach(section => section.remove());
+            grid.querySelectorAll(':scope > #contents > ytd-rich-section-renderer:not(.ytb-removed)')
+                .forEach(hideEl);
         });
         document.querySelectorAll([
-            'ytd-rich-shelf-renderer[is-shorts]',
-            'ytd-reel-shelf-renderer',
-            'ytd-reel-item-renderer',
-            'ytm-shorts-lockup-view-model',
-            'ytm-shorts-lockup-view-model-v2'
-        ].join(',')).forEach(el => el.remove());
+            'ytd-rich-shelf-renderer[is-shorts]:not(.ytb-removed)',
+            'ytd-reel-shelf-renderer:not(.ytb-removed)',
+            'ytd-reel-item-renderer:not(.ytb-removed)',
+            'ytm-shorts-lockup-view-model:not(.ytb-removed)',
+            'ytm-shorts-lockup-view-model-v2:not(.ytb-removed)'
+        ].join(',')).forEach(hideEl);
         document.querySelectorAll('a[href*="/shorts/"]').forEach(a => {
             const cell = a.closest(OUTER_GRID_CELLS) || a.closest('yt-lockup-view-model');
-            if (cell) cell.remove();
+            if (cell && !cell.classList.contains('ytb-removed')) hideEl(cell);
         });
     }
 
     function removeNonVideoCards() {
         document.querySelectorAll(NON_VIDEO_CARDS).forEach(card => {
-            const cell = card.closest(OUTER_GRID_CELLS);
-            (cell || card).remove();
+            const cell = card.closest(OUTER_GRID_CELLS) || card;
+            hideEl(cell);
         });
     }
 
     function processWatchedByProgressBar() {
         document.querySelectorAll(PROGRESS_SELECTORS).forEach(bar => {
+            if (bar.closest('.ytb-removed')) return;   // tile already hidden
             const w = bar.style && bar.style.width;
             if (!w) return;
             const pct = parseFloat(w);
@@ -580,6 +588,7 @@
 
     function processWatchedByContainer() {
         document.querySelectorAll(WATCHED_BAR_CONTAINERS).forEach(container => {
+            if (container.closest('.ytb-removed')) return;   // tile already hidden
             const widthEls = container.querySelectorAll('[style*="width"]');
             for (const el of widthEls) {
                 const w = el.style && el.style.width;
@@ -599,6 +608,7 @@
         if (!hiddenSet.size && !state.blockedChannels.length) return;
         const tiles = document.querySelectorAll(INNER_CONTAINERS);
         for (const tile of tiles) {
+            if (tile.closest('.ytb-removed')) continue;   // already hidden
             const id = getVideoIdFromNode(tile);
             if (hiddenSet.size && id && hiddenSet.has(id)) {
                 removeTile(tile);
@@ -662,7 +672,9 @@
 
     function runAll() {
         try {
-            flattenRows();
+            // flattenRows() intentionally not called: physically moving every
+            // tile out of its row generated add/remove churn and fought the
+            // renderer. The display:contents CSS already reflows the grid.
             if (settings.blockShorts) removeSectionShelves();
             removeNonVideoCards();
             if (settings.hideWatched) {

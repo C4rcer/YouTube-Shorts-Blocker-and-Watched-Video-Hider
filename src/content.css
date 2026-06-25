@@ -10,6 +10,16 @@ ytd-rich-grid-row > #contents {
 }
 
 /* ------------------------------------------------------------------
+ * Hidden tiles. We HIDE rather than remove() filtered tiles: removing
+ * Polymer-managed nodes makes YouTube re-stamp/re-fetch them, which on a
+ * heavily-watched channel turns into a DOM-churn + continuation-request
+ * storm. Keeping the node hidden in place avoids fighting the renderer.
+ * ------------------------------------------------------------------ */
+.ytb-removed {
+    display: none !important;
+}
+
+/* ------------------------------------------------------------------
  * Toast shown by the content script (e.g. "Blocked channel: …").
  * ------------------------------------------------------------------ */
 #ytb-toast {
