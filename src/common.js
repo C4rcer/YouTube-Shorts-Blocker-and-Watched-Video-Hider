@@ -18,13 +18,16 @@ const YTB = (function () {
         maxQuality: true,
         hideSidebarSpinner: true,
         reduceFlashing: true,
-        hideEndScreen: true
+        hideEndScreen: true,
+        volumeBoost: 1,
+        wheelVolume: true
     };
 
     function normalize(d) {
         d = d || {};
         const settings = Object.assign({}, DEFAULT_SETTINGS, d.settings || {});
         settings.watchedThreshold = clampThreshold(settings.watchedThreshold);
+        settings.volumeBoost = clampBoost(settings.volumeBoost);
         return {
             hiddenVideoIds: Array.isArray(d.hiddenVideoIds) ? [...new Set(d.hiddenVideoIds)] : [],
             blockedChannels: Array.isArray(d.blockedChannels)
@@ -45,6 +48,12 @@ const YTB = (function () {
         v = parseInt(v, 10);
         if (isNaN(v)) return DEFAULT_SETTINGS.watchedThreshold;
         return Math.min(100, Math.max(1, v));
+    }
+
+    function clampBoost(v) {
+        v = parseFloat(v);
+        if (isNaN(v)) return 1;
+        return Math.min(5, Math.max(1, Math.round(v * 100) / 100));
     }
 
     async function load() {
@@ -151,7 +160,7 @@ const YTB = (function () {
 
     return {
         DEFAULT_SETTINGS,
-        normalize, clampThreshold,
+        normalize, clampThreshold, clampBoost,
         load, save, onChanged,
         parseChannelInput, sameChannel, addChannel,
         channelLabel, channelUrl,

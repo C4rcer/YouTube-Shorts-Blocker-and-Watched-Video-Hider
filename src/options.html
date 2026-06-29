@@ -71,6 +71,15 @@
             <span class="t-text">Auto max quality<small>Set each new video to the highest available resolution when it loads.</small></span>
         </label>
         <label class="toggle">
+            <input type="checkbox" id="set-wheelvol">
+            <span class="t-text">Scroll-over-player volume<small>Scroll up/down on the video to change volume — past 100% it boosts (up to 500%).</small></span>
+        </label>
+        <div class="row" style="margin-top:10px;">
+            <span class="grow muted">Volume boost</span>
+            <input type="range" id="set-boost" min="100" max="500" step="5" style="flex:1 1 auto; max-width:200px;">
+            <span class="muted" id="boost-readout" style="min-width:48px; text-align:right;">100%</span>
+        </div>
+        <label class="toggle">
             <input type="checkbox" id="set-spinner">
             <span class="t-text">Hide sidebar loading spinner<small>Hides the spinning circle in the recommendations rail (cosmetic; loading still happens).</small></span>
         </label>

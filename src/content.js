@@ -30,7 +30,9 @@
         maxQuality: true,
         hideSidebarSpinner: true,
         reduceFlashing: true,
-        hideEndScreen: true
+        hideEndScreen: true,
+        volumeBoost: 1,        // 1 = 100% (native, no Web Audio graph)
+        wheelVolume: true      // scroll over the player to change volume/boost
     };
 
     /* ---- live state ------------------------------------------------ */
@@ -689,6 +691,7 @@
             if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
             processBlackout();
             if (settings.maxQuality && !blackoutActive) applyMaxQuality();
+            applyVolumeBoost();
         } catch (e) {
             console.warn('[YT Blocker] pass error:', e);
         } finally {
@@ -1081,6 +1084,95 @@
     }
 
     /* ==================================================================
+     * 5e. Volume boost (Web Audio gain on top of YouTube's own volume).
+     *     The graph is ONLY built once boost is turned up, and only from a
+     *     user gesture — so default users keep untouched native audio, and we
+     *     never route the element through a suspended context (which would mute
+     *     it). createMediaElementSource can run once per element; YouTube reuses
+     *     one <video>, so the graph persists across navigations.
+     * ================================================================== */
+    let audioCtx = null, boostGain = null;
+
+    function ensureBoostGraph() {
+        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (!v) return false;
+        if (v.dataset.ytbBoostWired) return !!boostGain;
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return false;
+            if (!audioCtx) audioCtx = new AC();
+            const src = audioCtx.createMediaElementSource(v);
+            boostGain = audioCtx.createGain();
+            src.connect(boostGain);
+            boostGain.connect(audioCtx.destination);
+            v.dataset.ytbBoostWired = '1';
+            return true;
+        } catch (e) {
+            console.warn('[YT Blocker] volume boost unavailable:', e);
+            return false;
+        }
+    }
+
+    // Keep the gain synced. Never wires the graph itself (that needs a gesture).
+    function applyVolumeBoost() {
+        if (!boostGain) return;
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        boostGain.gain.value = settings.volumeBoost || 1;
+    }
+
+    // Called from user gestures (wheel / slider) so the AudioContext can run.
+    let boostSaveTimer = null;
+    function setVolumeBoost(mult) {
+        mult = Math.min(5, Math.max(1, mult));
+        state.settings.volumeBoost = mult;
+        settings.volumeBoost = mult;
+        if (mult > 1) ensureBoostGraph();
+        applyVolumeBoost();
+        // Debounce persistence — wheel scrolling fires many times.
+        clearTimeout(boostSaveTimer);
+        boostSaveTimer = setTimeout(saveOnly, 500);
+    }
+
+    function showVolumeOverlay(text) {
+        let el = document.getElementById('ytb-vol-overlay');
+        const player = document.getElementById('movie_player');
+        if (!player) return;
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ytb-vol-overlay';
+            player.appendChild(el);
+        }
+        el.textContent = text;
+        el.classList.add('ytb-show');
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('ytb-show'), 900);
+    }
+
+    // Scroll over the player to change volume (0-100 native, 100-500 boosted).
+    function onPlayerWheel(e) {
+        if (!settings.wheelVolume) return;
+        if (location.pathname !== '/watch') return;
+        if (!e.target.closest || !e.target.closest('#movie_player')) return;
+        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (!v) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const cur = (settings.volumeBoost > 1) ? settings.volumeBoost * 100 : Math.round((v.muted ? 0 : v.volume) * 100);
+        let next = cur + (e.deltaY < 0 ? 5 : -5);
+        next = Math.min(500, Math.max(0, next));
+        if (next <= 100) {
+            if (v.muted) v.muted = false;
+            v.volume = next / 100;
+            setVolumeBoost(1);
+        } else {
+            if (v.muted) v.muted = false;
+            v.volume = 1;
+            setVolumeBoost(next / 100);
+        }
+        showVolumeOverlay('🔊 ' + next + '%');
+    }
+
+    /* ==================================================================
      * 6. Toast
      * ================================================================== */
     let toastTimer = null;
@@ -1140,6 +1232,9 @@
     // attribute to the page owner rather than a stale tile.
     document.addEventListener('pointerdown', (e) => {
         lastPointerDown = Date.now();
+        // First user gesture: if a boost was persisted, wire the graph now (so
+        // the AudioContext can run rather than muting the element).
+        if ((settings.volumeBoost || 1) > 1 && !boostGain) { ensureBoostGraph(); applyVolumeBoost(); }
         if (!e.target.closest) return;
         const tile = e.target.closest(INNER_CONTAINERS);
         if (tile) {
@@ -1151,6 +1246,9 @@
         }
         // Anything else (e.g. our own popup item) leaves the attribution intact.
     }, true);
+
+    // Scroll-over-player volume/boost control (passive:false so we can preventDefault).
+    document.addEventListener('wheel', onPlayerWheel, { capture: true, passive: false });
 
     api.runtime.onMessage.addListener((msg) => {
         if (!msg || !msg.action) return;

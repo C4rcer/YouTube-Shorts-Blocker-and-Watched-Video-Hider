@@ -20,6 +20,27 @@ ytd-rich-grid-row > #contents {
 }
 
 /* ------------------------------------------------------------------
+ * Volume / boost readout shown when scrolling over the player.
+ * ------------------------------------------------------------------ */
+#ytb-vol-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 60;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font: 600 16px/1 "Roboto", system-ui, sans-serif;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+#ytb-vol-overlay.ytb-show {
+    opacity: 1;
+}
+
+/* ------------------------------------------------------------------
  * Toast shown by the content script (e.g. "Blocked channel: …").
  * ------------------------------------------------------------------ */
 #ytb-toast {

@@ -24,6 +24,9 @@ userscript — all of that behaviour is folded into the content script, plus:
 - **Remove all Shorts** — sidebar entries, the channel "Shorts" tab, home/search
   shelves, and `/shorts/<id>` URLs (auto-redirected to `/watch?v=<id>`).
 - **Auto max quality.** Sets each new video to the highest available resolution as it loads.
+- **Volume boost.** Amplify past 100% (up to 500%) via a Web Audio gain node. Scroll up/down
+  over the player to change volume — below 100% it sets native volume, above 100% it boosts.
+  The audio graph is only built once you turn the boost up, so default users keep native audio.
 - **Hide the sidebar loading spinner** in the recommendations rail (cosmetic; loading still happens).
 - **Hide already-watched videos** once their progress bar passes a threshold (default 75%).
 - **Hide individual videos** — right-click → **Hide this video**.
@@ -96,6 +99,8 @@ Open the popup or the options page → **Import / Export**:
 | Auto "Don't recommend channel" | on | Best-effort native click when blocking from a tile. |
 | Black out blocked channels | on | Stop playback and hide the player/thumbnails behind a black panel on a blocked channel's page or video (recommendations stay). |
 | Auto max quality | on | Force each new video to the highest available resolution. |
+| Scroll-over-player volume | on | Scroll on the player to change volume; past 100% it boosts. |
+| Volume boost | 100% | Web Audio amplification (100–500%); the graph is only built when boost > 100%. |
 | Hide sidebar loading spinner | on | Hide the recommendations-rail loading spinner (cosmetic). |
 | Reduce flashing | on | Keep watched videos hidden from the start (CSS) instead of letting them paint then get removed — no pop-in/out when sorting oldest-first. |
 | Hide end-screen suggestions | on | Remove the suggested-video grid shown over the player when a video ends, plus pause-screen suggestions. |

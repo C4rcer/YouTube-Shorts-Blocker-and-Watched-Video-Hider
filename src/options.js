@@ -18,6 +18,9 @@
         recommend: $('set-recommend'),
         blackout: $('set-blackout'),
         quality: $('set-quality'),
+        wheelvol: $('set-wheelvol'),
+        boost: $('set-boost'),
+        boostReadout: $('boost-readout'),
         spinner: $('set-spinner'),
         endscreen: $('set-endscreen'),
         threshold: $('set-threshold'),
@@ -50,6 +53,9 @@
         els.recommend.checked = !!data.settings.autoDoNotRecommend;
         els.blackout.checked = !!data.settings.blackoutBlockedChannels;
         els.quality.checked = !!data.settings.maxQuality;
+        els.wheelvol.checked = !!data.settings.wheelVolume;
+        els.boost.value = Math.round((data.settings.volumeBoost || 1) * 100);
+        els.boostReadout.textContent = els.boost.value + '%';
         els.spinner.checked = !!data.settings.hideSidebarSpinner;
         els.endscreen.checked = !!data.settings.hideEndScreen;
         els.threshold.value = data.settings.watchedThreshold;
@@ -167,6 +173,8 @@
         data.settings.autoDoNotRecommend = els.recommend.checked;
         data.settings.blackoutBlockedChannels = els.blackout.checked;
         data.settings.maxQuality = els.quality.checked;
+        data.settings.wheelVolume = els.wheelvol.checked;
+        data.settings.volumeBoost = YTB.clampBoost((parseInt(els.boost.value, 10) || 100) / 100);
         data.settings.hideSidebarSpinner = els.spinner.checked;
         data.settings.hideEndScreen = els.endscreen.checked;
         data.settings.watchedThreshold = YTB.clampThreshold(els.threshold.value);
@@ -215,7 +223,9 @@
     function wire() {
         els.addBtn.addEventListener('click', addChannel);
         els.addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addChannel(); });
-        [els.shorts, els.watched, els.flash, els.recommend, els.blackout, els.quality, els.spinner, els.endscreen].forEach(c => c.addEventListener('change', saveSettings));
+        [els.shorts, els.watched, els.flash, els.recommend, els.blackout, els.quality, els.wheelvol, els.spinner, els.endscreen].forEach(c => c.addEventListener('change', saveSettings));
+        els.boost.addEventListener('input', () => { els.boostReadout.textContent = els.boost.value + '%'; });
+        els.boost.addEventListener('change', saveSettings);
         els.threshold.addEventListener('change', saveSettings);
         els.exportBtn.addEventListener('click', doExport);
         els.importBtn.addEventListener('click', () => els.importFile.click());
