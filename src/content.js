@@ -692,6 +692,7 @@
             processBlackout();
             if (settings.maxQuality && !blackoutActive) applyMaxQuality();
             applyVolumeBoost();
+            ensureBoostButton();
         } catch (e) {
             console.warn('[YT Blocker] pass error:', e);
         } finally {
@@ -1157,9 +1158,9 @@
         if (!v) return;
         e.preventDefault();
         e.stopPropagation();
-        const cur = (settings.volumeBoost > 1) ? settings.volumeBoost * 100 : Math.round((v.muted ? 0 : v.volume) * 100);
+        const cur = Math.round((settings.volumeBoost > 1) ? settings.volumeBoost * 100 : (v.muted ? 0 : v.volume) * 100);
         let next = cur + (e.deltaY < 0 ? 5 : -5);
-        next = Math.min(500, Math.max(0, next));
+        next = Math.min(500, Math.max(0, Math.round(next)));
         if (next <= 100) {
             if (v.muted) v.muted = false;
             v.volume = next / 100;
@@ -1170,6 +1171,55 @@
             setVolumeBoost(next / 100);
         }
         showVolumeOverlay('🔊 ' + next + '%');
+        updateBoostButton();
+    }
+
+    // Visible in-player control: a % readout button in the player's right
+    // controls, so the volume/boost feature is discoverable (not just a hidden
+    // scroll gesture). Click resets to 100%; scrolling the player adjusts it.
+    function currentVolPercent() {
+        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if ((settings.volumeBoost || 1) > 1) return Math.round(settings.volumeBoost * 100);
+        if (!v) return 100;
+        return Math.round((v.muted ? 0 : v.volume) * 100);
+    }
+
+    function updateBoostButton() {
+        const btn = document.getElementById('ytb-boost-btn');
+        if (!btn) return;
+        btn.textContent = currentVolPercent() + '%';
+        btn.classList.toggle('ytb-boosting', (settings.volumeBoost || 1) > 1);
+    }
+
+    function ensureBoostButton() {
+        const btn0 = document.getElementById('ytb-boost-btn');
+        if (location.pathname !== '/watch' || !settings.wheelVolume) {
+            if (btn0) btn0.remove();
+            return;
+        }
+        const bar = document.querySelector('.ytp-right-controls-right') ||
+                    document.querySelector('.ytp-right-controls');
+        if (!bar) return;
+        let btn = btn0;
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'ytb-boost-btn';
+            btn.className = 'ytp-button ytb-boost-btn';
+            btn.title = 'Volume / boost — scroll on the video to adjust, click to reset to 100%';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setVolumeBoost(1);
+                updateBoostButton();
+            });
+        }
+        if (btn.parentNode !== bar) bar.insertBefore(btn, bar.firstChild);
+        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (v && !v.dataset.ytbVolListener) {
+            v.dataset.ytbVolListener = '1';
+            v.addEventListener('volumechange', updateBoostButton);
+        }
+        updateBoostButton();
     }
 
     /* ==================================================================

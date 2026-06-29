@@ -14,6 +14,8 @@
         watched: $('set-watched'),
         recommend: $('set-recommend'),
         threshold: $('set-threshold'),
+        boost: $('set-boost'),
+        boostReadout: $('boost-readout'),
         exportBtn: $('export-btn'),
         importBtn: $('import-btn'),
         importFile: $('import-file'),
@@ -29,6 +31,8 @@
         els.watched.checked = !!data.settings.hideWatched;
         els.recommend.checked = !!data.settings.autoDoNotRecommend;
         els.threshold.value = data.settings.watchedThreshold;
+        els.boost.value = Math.round((data.settings.volumeBoost || 1) * 100);
+        els.boostReadout.textContent = els.boost.value + '%';
     }
 
     function status(msg, isErr) {
@@ -59,6 +63,7 @@
         data.settings.hideWatched = els.watched.checked;
         data.settings.autoDoNotRecommend = els.recommend.checked;
         data.settings.watchedThreshold = YTB.clampThreshold(els.threshold.value);
+        data.settings.volumeBoost = YTB.clampBoost((parseInt(els.boost.value, 10) || 100) / 100);
         await commit();
     }
 
@@ -98,6 +103,8 @@
         els.addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addChannel(); });
         [els.shorts, els.watched, els.recommend].forEach(c => c.addEventListener('change', saveSettings));
         els.threshold.addEventListener('change', saveSettings);
+        els.boost.addEventListener('input', () => { els.boostReadout.textContent = els.boost.value + '%'; });
+        els.boost.addEventListener('change', saveSettings);
         els.exportBtn.addEventListener('click', doExport);
         els.importBtn.addEventListener('click', () => els.importFile.click());
         els.importFile.addEventListener('change', (e) => { if (e.target.files[0]) doImport(e.target.files[0]); e.target.value = ''; });

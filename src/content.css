@@ -40,6 +40,26 @@ ytd-rich-grid-row > #contents {
     opacity: 1;
 }
 
+/* In-player volume/boost button (sits in the player's right controls). */
+.ytb-boost-btn {
+    width: auto !important;
+    min-width: 38px;
+    padding: 0 6px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    font: 600 12px/1 "Roboto", "Arial", sans-serif !important;
+    color: #fff;
+    vertical-align: top;
+    opacity: 0.9;
+}
+.ytb-boost-btn:hover {
+    opacity: 1;
+}
+.ytb-boost-btn.ytb-boosting {
+    color: #ffd24d;
+}
+
 /* ------------------------------------------------------------------
  * Toast shown by the content script (e.g. "Blocked channel: …").
  * ------------------------------------------------------------------ */

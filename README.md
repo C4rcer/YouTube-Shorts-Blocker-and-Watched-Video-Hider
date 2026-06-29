@@ -24,9 +24,11 @@ userscript — all of that behaviour is folded into the content script, plus:
 - **Remove all Shorts** — sidebar entries, the channel "Shorts" tab, home/search
   shelves, and `/shorts/<id>` URLs (auto-redirected to `/watch?v=<id>`).
 - **Auto max quality.** Sets each new video to the highest available resolution as it loads.
-- **Volume boost.** Amplify past 100% (up to 500%) via a Web Audio gain node. Scroll up/down
-  over the player to change volume — below 100% it sets native volume, above 100% it boosts.
-  The audio graph is only built once you turn the boost up, so default users keep native audio.
+- **Volume boost.** Amplify past 100% (up to 500%) via a Web Audio gain node. A live **% button
+  in the player control bar** shows the current volume/boost (scroll on the video to adjust,
+  click to reset to 100%); below 100% it sets native volume, above 100% it boosts. Also
+  adjustable from the popup/options slider. The audio graph is only built once you turn the
+  boost up, so default users keep native audio.
 - **Hide the sidebar loading spinner** in the recommendations rail (cosmetic; loading still happens).
 - **Hide already-watched videos** once their progress bar passes a threshold (default 75%).
 - **Hide individual videos** — right-click → **Hide this video**.
