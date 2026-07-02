@@ -692,7 +692,7 @@
             processBlackout();
             if (settings.maxQuality && !blackoutActive) applyMaxQuality();
             applyVolumeBoost();
-            ensureBoostButton();
+            ensureBoostSlider();
         } catch (e) {
             console.warn('[YT Blocker] pass error:', e);
         } finally {
@@ -1171,55 +1171,84 @@
             setVolumeBoost(next / 100);
         }
         showVolumeOverlay('🔊 ' + next + '%');
-        updateBoostButton();
+        updateBoostUI();
     }
 
-    // Visible in-player control: a % readout button in the player's right
-    // controls, so the volume/boost feature is discoverable (not just a hidden
-    // scroll gesture). Click resets to 100%; scrolling the player adjusts it.
-    function currentVolPercent() {
-        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
-        if ((settings.volumeBoost || 1) > 1) return Math.round(settings.volumeBoost * 100);
-        if (!v) return 100;
-        return Math.round((v.muted ? 0 : v.volume) * 100);
+    // Visible in-player control: a second slider inline next to YouTube's own
+    // volume control. It only appears once native volume sits at 100% and
+    // extends it to 500% (Web Audio boost). Pulling the native slider back
+    // below 100% resets the boost to off and hides the slider again.
+    function playerVideo() {
+        return document.querySelector('video.html5-main-video') || document.querySelector('video');
     }
 
-    function updateBoostButton() {
-        const btn = document.getElementById('ytb-boost-btn');
-        if (!btn) return;
-        btn.textContent = currentVolPercent() + '%';
-        btn.classList.toggle('ytb-boosting', (settings.volumeBoost || 1) > 1);
+    function nativeAtMax(v) {
+        return !!v && !v.muted && v.volume >= 0.999;
     }
 
-    function ensureBoostButton() {
-        const btn0 = document.getElementById('ytb-boost-btn');
+    function updateBoostUI() {
+        const wrap = document.getElementById('ytb-boost-slider');
+        if (!wrap) return;
+        const v = playerVideo();
+        const atMax = nativeAtMax(v);
+        // Native volume dropped below 100%: boost turns off and the slider hides.
+        if (!atMax && (settings.volumeBoost || 1) > 1) setVolumeBoost(1);
+        wrap.classList.toggle('ytb-hide', !atMax);
+        const input = wrap.querySelector('input');
+        const label = wrap.querySelector('.ytb-bs-label');
+        const pct = Math.round((settings.volumeBoost || 1) * 100);
+        if (input && document.activeElement !== input) input.value = pct;
+        if (label) label.textContent = pct + '%';
+        wrap.classList.toggle('ytb-boosting', pct > 100);
+    }
+
+    function ensureBoostSlider() {
+        const existing = document.getElementById('ytb-boost-slider');
         if (location.pathname !== '/watch' || !settings.wheelVolume) {
-            if (btn0) btn0.remove();
+            if (existing) existing.remove();
             return;
         }
-        const bar = document.querySelector('.ytp-right-controls-right') ||
-                    document.querySelector('.ytp-right-controls');
-        if (!bar) return;
-        let btn = btn0;
-        if (!btn) {
-            btn = document.createElement('button');
-            btn.id = 'ytb-boost-btn';
-            btn.className = 'ytp-button ytb-boost-btn';
-            btn.title = 'Volume / boost — scroll on the video to adjust, click to reset to 100%';
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
+        const volArea = document.querySelector('#movie_player .ytp-volume-area') ||
+                        document.querySelector('#movie_player .ytp-volume-panel');
+        if (!volArea || !volArea.parentNode) return;
+        let wrap = existing;
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'ytb-boost-slider';
+            wrap.title = 'Volume boost — shown while volume is at 100%. Click the % to reset.';
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = '100';
+            input.max = '500';
+            input.step = '5';
+            const label = document.createElement('span');
+            label.className = 'ytb-bs-label';
+            wrap.appendChild(input);
+            wrap.appendChild(label);
+            input.addEventListener('input', (e) => {
+                e.stopPropagation();
+                const pct = parseInt(input.value, 10) || 100;
+                const v = playerVideo();
+                if (v) { if (v.muted) v.muted = false; v.volume = 1; }
+                setVolumeBoost(pct / 100);
+                updateBoostUI();
+                showVolumeOverlay('🔊 ' + pct + '%');
+            });
+            label.addEventListener('click', (e) => {
                 e.stopPropagation();
                 setVolumeBoost(1);
-                updateBoostButton();
+                updateBoostUI();
             });
         }
-        if (btn.parentNode !== bar) bar.insertBefore(btn, bar.firstChild);
-        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (wrap.parentNode !== volArea.parentNode || wrap.previousElementSibling !== volArea) {
+            volArea.parentNode.insertBefore(wrap, volArea.nextSibling);
+        }
+        const v = playerVideo();
         if (v && !v.dataset.ytbVolListener) {
             v.dataset.ytbVolListener = '1';
-            v.addEventListener('volumechange', updateBoostButton);
+            v.addEventListener('volumechange', updateBoostUI);
         }
-        updateBoostButton();
+        updateBoostUI();
     }
 
     /* ==================================================================

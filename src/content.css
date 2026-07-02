@@ -40,23 +40,37 @@ ytd-rich-grid-row > #contents {
     opacity: 1;
 }
 
-/* In-player volume/boost button (sits in the player's right controls). */
-.ytb-boost-btn {
-    width: auto !important;
-    min-width: 38px;
-    padding: 0 6px !important;
-    display: inline-flex !important;
+/* ------------------------------------------------------------------
+ * Inline volume-boost slider: sits right after YouTube's own volume
+ * control in the player's left controls. Only visible while the native
+ * volume is at 100%; extends it 100–500% via Web Audio boost.
+ * ------------------------------------------------------------------ */
+#ytb-boost-slider {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font: 600 12px/1 "Roboto", "Arial", sans-serif !important;
-    color: #fff;
+    gap: 6px;
+    height: 100%;
+    margin-left: 6px;
     vertical-align: top;
-    opacity: 0.9;
 }
-.ytb-boost-btn:hover {
-    opacity: 1;
+#ytb-boost-slider.ytb-hide {
+    display: none;
 }
-.ytb-boost-btn.ytb-boosting {
+#ytb-boost-slider input[type="range"] {
+    width: 72px;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #ffd24d;
+}
+#ytb-boost-slider .ytb-bs-label {
+    min-width: 40px;
+    color: #eee;
+    font: 600 12px/1 "Roboto", "Arial", sans-serif;
+    cursor: pointer;
+    user-select: none;
+}
+#ytb-boost-slider.ytb-boosting .ytb-bs-label {
     color: #ffd24d;
 }
 
