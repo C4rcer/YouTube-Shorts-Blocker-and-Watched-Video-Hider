@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YouTube Channel Blocker & Cleaner",
-  "version": "3.5.2",
+  "version": "3.6.0",
   "description": "Block whole YouTube channels, hide Shorts and already-watched videos, hide individual tiles, and import/export your block list. Best-effort triggers YouTube's native \"Don't recommend channel\".",
 
   "browser_specific_settings": {

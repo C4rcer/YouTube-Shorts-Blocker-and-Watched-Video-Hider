@@ -133,6 +133,11 @@
         .flatMap(cell => ANTIFLASH_WATCHED.map(w => `${cell}:has(${w}):not([data-ytb-keep])`))
         .join(',');
     const ANTIFLASH_CSS = ANTIFLASH_SELECTOR + ' { display: none !important; }';
+    // JS-side equivalents: querying the (few) watched overlays and walking up
+    // with closest() is far cheaper than evaluating the :has() selector above
+    // via querySelectorAll on every pass.
+    const ANTIFLASH_WATCHED_SEL = ANTIFLASH_WATCHED.join(',');
+    const ANTIFLASH_CELLS_SEL = ANTIFLASH_CELLS.join(',');
 
     // Hide the related-sidebar infinite-scroll spinner. visibility:hidden keeps
     // the element's box so it still triggers loading of more recommendations.
@@ -290,10 +295,18 @@
     }
 
     // Reveal watched tiles that survived the threshold removal (i.e. below the
-    // threshold), so the anti-flash CSS stops hiding them.
+    // threshold), so the anti-flash CSS stops hiding them. Scans the watched
+    // overlays (few) instead of evaluating the :has() selector (expensive).
     function revealRemainingWatched() {
-        document.querySelectorAll(ANTIFLASH_SELECTOR).forEach(cell => {
-            cell.dataset.ytbKeep = '1';
+        document.querySelectorAll(ANTIFLASH_WATCHED_SEL).forEach(overlay => {
+            // Mark every ancestor cell, not just the innermost: tiles nest
+            // (yt-lockup-view-model inside ytd-rich-item-renderer) and the
+            // anti-flash CSS hides each matching level independently.
+            let cell = overlay.closest(ANTIFLASH_CELLS_SEL);
+            while (cell) {
+                if (!cell.dataset.ytbKeep) cell.dataset.ytbKeep = '1';
+                cell = cell.parentElement && cell.parentElement.closest(ANTIFLASH_CELLS_SEL);
+            }
         });
     }
 
@@ -304,7 +317,8 @@
         if (!settings.blockShorts) return;
         if (location.pathname.startsWith('/shorts/')) {
             const id = location.pathname.split('/')[2];
-            if (id) location.replace('https://www.youtube.com/watch?v=' + id);
+            // Keep the current host so m.youtube.com stays on the mobile site.
+            if (id) location.replace(location.origin + '/watch?v=' + id);
         }
     }
 
@@ -664,12 +678,16 @@
         if (changed) { rebuildDerived(); saveOnly(); }
     }
 
-    function enrichFromCurrentPage() {
-        if (!state.blockedChannels.length) return;
-        const info = location.pathname === '/watch'
+    // Channel identity of the page itself (watch-page owner or channel page).
+    // Computed once per pass in runAll and shared by enrichment + blackout.
+    function getCurrentPageChannelInfo() {
+        return location.pathname === '/watch'
             ? getWatchPageOwnerInfo()
             : getChannelInfoFromChannelPage();
-        if (info && tileMatchesBlockedChannel(info)) enrichBlockedChannel(info);
+    }
+
+    function enrichFromCurrentPage(pageInfo) {
+        if (pageInfo && tileMatchesBlockedChannel(pageInfo)) enrichBlockedChannel(pageInfo);
     }
 
     function runAll() {
@@ -683,15 +701,19 @@
                 processWatchedByProgressBar();
                 processWatchedByContainer();
             }
-            enrichFromCurrentPage();   // learn missing identifiers, rebuild index if changed
-            processTiles();            // then hide tiles using the enriched index
-            processEndScreen();        // and the in-player end-screen suggestions
+            // Page identity is only needed when channels are blocked; resolve it
+            // once and share it between enrichment and blackout.
+            const pageInfo = state.blockedChannels.length ? getCurrentPageChannelInfo() : null;
+            enrichFromCurrentPage(pageInfo);   // learn missing identifiers, rebuild index if changed
+            processTiles();                    // then hide tiles using the enriched index
+            processEndScreen();                // and the in-player end-screen suggestions
             // Menu scanning is expensive (*[role="menuitem"]); only do it shortly
             // after a press, when a menu may actually have opened.
             if (Date.now() - lastPointerDown < 3000) injectBlockChannelMenuItem();
-            processBlackout();
+            processBlackout(pageInfo);
             if (settings.maxQuality && !blackoutActive) applyMaxQuality();
             applyVolumeBoost();
+            ensureWheelListener();
             ensureBoostSlider();
         } catch (e) {
             console.warn('[YT Blocker] pass error:', e);
@@ -1016,14 +1038,9 @@
         setPanelInfo(panel, info);
     }
 
-    function currentBlockedPage() {
-        if (!state.blockedChannels.length) return null;
-        if (location.pathname === '/watch') {
-            const owner = getWatchPageOwnerInfo();
-            return (owner && tileMatchesBlockedChannel(owner)) ? { type: 'watch', info: owner } : null;
-        }
-        const ch = getChannelInfoFromChannelPage();
-        return (ch && tileMatchesBlockedChannel(ch)) ? { type: 'channel', info: ch } : null;
+    function currentBlockedPage(pageInfo) {
+        if (!pageInfo || !tileMatchesBlockedChannel(pageInfo)) return null;
+        return { type: location.pathname === '/watch' ? 'watch' : 'channel', info: pageInfo };
     }
 
     function clearBlackout() {
@@ -1034,9 +1051,9 @@
         if (p) p.remove();
     }
 
-    function processBlackout() {
+    function processBlackout(pageInfo) {
         if (!settings.blackoutBlockedChannels) { clearBlackout(); return; }
-        const hit = currentBlockedPage();
+        const hit = currentBlockedPage(pageInfo);
         if (!hit) { clearBlackout(); return; }
         blackoutActive = true;
         stopPlayback();
@@ -1147,6 +1164,17 @@
         el.classList.add('ytb-show');
         clearTimeout(el._t);
         el._t = setTimeout(() => el.classList.remove('ytb-show'), 900);
+    }
+
+    // Attach the wheel handler to the player itself (not document): a
+    // non-passive document-level wheel listener forces every scroll on the
+    // page through JS and janks scrolling everywhere. YouTube reuses one
+    // #movie_player across SPA navigations, so this wires at most once.
+    function ensureWheelListener() {
+        const player = document.getElementById('movie_player');
+        if (!player || player.dataset.ytbWheel) return;
+        player.dataset.ytbWheel = '1';
+        player.addEventListener('wheel', onPlayerWheel, { capture: true, passive: false });
     }
 
     // Scroll over the player to change volume (0-100 native, 100-500 boosted).
@@ -1326,9 +1354,6 @@
         // Anything else (e.g. our own popup item) leaves the attribution intact.
     }, true);
 
-    // Scroll-over-player volume/boost control (passive:false so we can preventDefault).
-    document.addEventListener('wheel', onPlayerWheel, { capture: true, passive: false });
-
     api.runtime.onMessage.addListener((msg) => {
         if (!msg || !msg.action) return;
         switch (msg.action) {
@@ -1379,7 +1404,16 @@
         // frame. This is what keeps channel pages with thousands of tiles from
         // locking up (each pass does several full-document scans).
         let debounceTimer = null;
+        let pendingWhileHidden = false;
+        // Background watch pages still need passes so a blocked channel's
+        // video gets blacked out / paused before it racks up watch time.
+        const mustRunHidden = () =>
+            settings.blackoutBlockedChannels &&
+            state.blockedChannels.length &&
+            location.pathname === '/watch';
         const schedule = () => {
+            // Don't burn CPU scanning a background tab; catch up on return.
+            if (document.hidden && !mustRunHidden()) { pendingWhileHidden = true; return; }
             if (debounceTimer) return;
             debounceTimer = setTimeout(() => { debounceTimer = null; runAll(); }, 200);
         };
@@ -1389,7 +1423,13 @@
         const observer = new MutationObserver(schedule);
         observer.observe(document.body, { childList: true, subtree: true });
         runAll();
-        setInterval(runAll, 2000);
+        setInterval(() => { if (!document.hidden || mustRunHidden()) runAll(); }, 2000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && pendingWhileHidden) {
+                pendingWhileHidden = false;
+                runAll();
+            }
+        });
 
         // Shorts redirect lifecycle
         redirectShortsUrl();
